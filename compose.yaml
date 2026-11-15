@@ -25,6 +25,26 @@ services:
     networks:
       - interne
 
+  # Applique les migrations avec le compte propriétaire, puis s'arrête.
+  # L'API ne démarre qu'après sa réussite et ne reçoit jamais ce mot de passe.
+  migrations:
+    build:
+      context: ./api
+      target: prod
+    command: ["node", "scripts/migrer.js"]
+    restart: "no"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-absences}
+      DB_USER: ${POSTGRES_USER:-absences_owner}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - interne
+
   api:
     build:
       context: ./api
@@ -44,6 +64,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s

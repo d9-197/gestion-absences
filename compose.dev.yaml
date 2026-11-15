@@ -4,6 +4,11 @@ services:
     ports:
       - "127.0.0.1:${DB_PORT_LOCAL:-5432}:5432"
 
+  # Les migrations sont montées en volume : une nouvelle migration s'applique sans reconstruire l'image.
+  migrations:
+    volumes:
+      - ./api/migrations:/app/migrations:ro
+
   api:
     build:
       target: dev

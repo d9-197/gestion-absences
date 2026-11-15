@@ -6,6 +6,8 @@ COPY package.json package-lock.json ./
 FROM base AS dev
 RUN npm ci
 COPY src ./src
+COPY migrations ./migrations
+COPY scripts ./scripts
 USER node
 EXPOSE 3000
 CMD ["node", "--watch", "src/server.js"]
@@ -15,6 +17,8 @@ FROM base AS prod
 ENV NODE_ENV=production
 RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
+COPY migrations ./migrations
+COPY scripts ./scripts
 USER node
 EXPOSE 3000
 CMD ["node", "src/server.js"]
