@@ -3,6 +3,8 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import { creerSessions } from './auth/sessions.js';
 import { routesAuth } from './auth/routes.js';
+import { routesAdmin } from './admin/index.js';
+import { gestionnaireErreurs } from './erreurs.js';
 
 const LIMITES = {
   connexion: { max: 10, timeWindow: '1 minute' },
@@ -14,6 +16,8 @@ export async function construireApp({ pool, config, courriel, microsoft = null, 
   // L'API n'est jointe qu'à travers nginx : l'adresse du client vient de l'en-tête X-Forwarded-For.
   const app = Fastify({ logger, trustProxy: true });
   const sessions = creerSessions({ pool, config });
+
+  app.setErrorHandler(gestionnaireErreurs);
 
   await app.register(cookie);
   // Limites appliquées seulement aux routes qui en déclarent une (connexion, mot de passe).
@@ -46,6 +50,7 @@ export async function construireApp({ pool, config, courriel, microsoft = null, 
   });
 
   await app.register(routesAuth, { pool, config, sessions, courriel, microsoft, limites });
+  await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel });
 
   return app;
 }

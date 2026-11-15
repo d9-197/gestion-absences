@@ -117,6 +117,22 @@ La commande crée l'équipe « Direction », le directeur, et affiche un lien va
 
 Dans le code de l'API, une route se protège avec `preHandler: [app.authentifier, app.exigerRole('directeur')]`.
 
+## Administration
+
+Les directeurs disposent de trois écrans, accessibles depuis le bandeau :
+
+- **Collaborateurs** : création avec invitation par e-mail, modification, changement d'équipe et de rôle, désactivation. Un collaborateur ne se supprime pas.
+- **Équipes** : arborescence, responsable et délégués de chaque équipe.
+- **Types d'absence** : libellé, approbation requise, confidentialité, délai de prévenance.
+
+Les routes correspondantes sont sous `/api/admin` et répondent 403 à tout autre rôle. Garde-fous appliqués par l'API :
+
+- Un directeur ne peut ni se désactiver ni changer son propre rôle : il reste donc toujours un directeur actif.
+- Le responsable et les délégués d'une équipe doivent être actifs, avec le rôle responsable ou directeur.
+- Le responsable d'une équipe ne peut être ni rétrogradé ni désactivé tant qu'un autre n'est pas désigné. Ses délégations, elles, sont retirées automatiquement.
+- Désactiver un collaborateur ferme ses sessions.
+- Une équipe ou un type d'absence déjà utilisés ne se suppriment pas : ils se désactivent.
+
 ## Comptes de base de données
 
 - `absences_owner` : propriétaire du schéma, réservé aux migrations.
@@ -126,4 +142,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données et l'authentification sont en place. Une fois connecté, on n'arrive encore que sur une page d'accueil provisoire : les demandes, la validation et le planning restent à développer.
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Restent à développer : le calendrier et les paramètres, les demandes, la validation, le planning, les e-mails avec PDF et l'export.

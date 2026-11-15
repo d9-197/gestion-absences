@@ -40,6 +40,7 @@ body {
 }
 
 h1 { font-size: 1.5rem; line-height: 1.25; margin: 0 0 1.25rem; }
+h2 { font-size: 1.2rem; line-height: 1.3; margin: 0 0 1rem; }
 a { color: var(--accent); }
 
 .carte {
@@ -54,7 +55,7 @@ a { color: var(--accent); }
 form { display: flex; flex-direction: column; }
 label { font-weight: 600; margin: 0.75rem 0 0.25rem; }
 
-input {
+input:not([type=checkbox]), select {
   font: inherit;
   color: inherit;
   background: var(--fond);
@@ -63,7 +64,7 @@ input {
   padding: 0.6rem 0.7rem;
 }
 
-input:focus-visible, .bouton:focus-visible, a:focus-visible {
+input:focus-visible, select:focus-visible, .bouton:focus-visible, a:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
@@ -118,7 +119,7 @@ input:focus-visible, .bouton:focus-visible, a:focus-visible {
   border-bottom: 1px solid var(--bord);
 }
 
-.page { width: min(48rem, calc(100% - 2rem)); margin: 2rem auto; }
+.page { width: min(64rem, calc(100% - 2rem)); margin: 2rem auto; }
 
 .fiche {
   display: grid;
@@ -132,3 +133,67 @@ input:focus-visible, .bouton:focus-visible, a:focus-visible {
 }
 .fiche dt { color: var(--texte-doux); }
 .fiche dd { margin: 0; overflow-wrap: anywhere; }
+
+/* --- Navigation ------------------------------------------------------------ */
+
+.navigation { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; flex: 1; }
+.navigation a { color: var(--texte); text-decoration: none; padding: 0.15rem 0; border-bottom: 2px solid transparent; }
+.navigation a:hover { border-bottom-color: var(--bord); }
+.navigation a.active { border-bottom-color: var(--accent); font-weight: 600; }
+
+/* --- Pages de liste -------------------------------------------------------- */
+
+.entete-page { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+.entete-page h1 { margin: 0; }
+.bouton.compact { width: auto; margin: 0; padding: 0.5rem 0.9rem; }
+
+.tableau-defilant { overflow-x: auto; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 0.6rem 0.75rem; text-align: left; vertical-align: top; }
+th { font-size: 0.85rem; color: var(--texte-doux); font-weight: 600; white-space: nowrap; border-bottom: 1px solid var(--bord); }
+tbody tr + tr td { border-top: 1px solid var(--bord); }
+td.nombre, th.nombre { text-align: right; font-variant-numeric: tabular-nums; }
+tr.inactif td { color: var(--texte-doux); }
+.actions-ligne { white-space: nowrap; }
+.actions-ligne .bouton.lien { margin: 0 1rem 0 0; }
+.manquant { color: var(--erreur-texte); }
+
+.pastille {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.45rem;
+  font-size: 0.8rem;
+  color: var(--texte-doux);
+  border: 1px solid var(--bord);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* --- Formulaires en fenêtre ------------------------------------------------ */
+
+.dialogue {
+  width: min(30rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  padding: 1.5rem;
+  color: var(--texte);
+  background: var(--surface);
+  border: 1px solid var(--bord);
+  border-radius: 10px;
+}
+.dialogue::backdrop { background: rgb(0 0 0 / 0.45); }
+
+.case { display: flex; gap: 0.5rem; align-items: baseline; margin: 0.75rem 0 0; font-weight: 400; }
+.case input { flex: none; }
+fieldset { margin: 1rem 0 0; padding: 0.25rem 0.9rem 0.9rem; border: 1px solid var(--bord); border-radius: 6px; }
+legend { padding: 0 0.35rem; font-weight: 600; }
+fieldset .case:first-of-type { margin-top: 0.25rem; }
+
+.actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+.actions .bouton { width: auto; margin: 0; padding: 0.55rem 1.1rem; }
+
+.page > .case { margin: 0 0 0.75rem; }
+
+/* Sur petit écran, la navigation passe sur sa propre ligne, sous le titre et le nom. */
+@media (max-width: 640px) {
+  .navigation { order: 3; flex-basis: 100%; }
+}
