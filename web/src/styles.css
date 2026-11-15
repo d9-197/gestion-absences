@@ -197,3 +197,14 @@ fieldset .case:first-of-type { margin-top: 0.25rem; }
 @media (max-width: 640px) {
   .navigation { order: 3; flex-basis: 100%; }
 }
+
+/* --- Calendrier ------------------------------------------------------------ */
+
+.selecteur-annee { display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; }
+.selecteur-annee .bouton { padding: 0.35rem 0.7rem; }
+.groupe-boutons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.entete-page h2 { margin: 0; }
+.section-suivante { margin-top: 2.5rem; }
+.majuscule::first-letter { text-transform: uppercase; }
+td.vide { color: var(--texte-doux); text-align: center; }
+section > .aide { margin: -0.5rem 0 0.75rem; }

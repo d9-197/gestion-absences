@@ -1,8 +1,9 @@
-import pg from 'pg';
+import pg from './base.js';
 import { config } from './config.js';
 import { construireApp } from './app.js';
 import { creerCourriel } from './courriel.js';
 import { creerMicrosoft } from './auth/microsoft.js';
+import { assurerAnnee } from './calendrier/service.js';
 
 const pool = new pg.Pool(config.db);
 const app = await construireApp({
@@ -24,6 +25,13 @@ async function arreter(signal) {
 }
 process.on('SIGTERM', () => arreter('SIGTERM'));
 process.on('SIGINT', () => arreter('SIGINT'));
+
+// Préremplit les jours fériés de l'année en cours et de la suivante. Un échec ne bloque pas le démarrage :
+// le préremplissage est refait à la première utilisation du calendrier.
+const anneeCourante = new Date().getFullYear();
+for (const an of [anneeCourante, anneeCourante + 1]) {
+  await assurerAnnee(pool, an).catch((erreur) => app.log.warn(erreur, `jours fériés ${an} non préremplis`));
+}
 
 try {
   await app.listen({ host: '0.0.0.0', port: config.port });

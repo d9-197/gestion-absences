@@ -15,6 +15,7 @@ export default function Cadre({ children }) {
               <NavLink to="/admin/collaborateurs">Collaborateurs</NavLink>
               <NavLink to="/admin/equipes">Équipes</NavLink>
               <NavLink to="/admin/types-absence">Types d'absence</NavLink>
+              <NavLink to="/admin/calendrier">Calendrier</NavLink>
             </>
           )}
         </nav>

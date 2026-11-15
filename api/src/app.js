@@ -1,9 +1,11 @@
+import './base.js';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import { creerSessions } from './auth/sessions.js';
 import { routesAuth } from './auth/routes.js';
 import { routesAdmin } from './admin/index.js';
+import { routesCalendrier } from './calendrier/routes.js';
 import { gestionnaireErreurs } from './erreurs.js';
 
 const LIMITES = {
@@ -51,6 +53,7 @@ export async function construireApp({ pool, config, courriel, microsoft = null, 
 
   await app.register(routesAuth, { pool, config, sessions, courriel, microsoft, limites });
   await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel });
+  await app.register(routesCalendrier, { prefix: '/api', pool });
 
   return app;
 }

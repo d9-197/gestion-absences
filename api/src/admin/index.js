@@ -1,3 +1,4 @@
+import { routesAdminCalendrier } from './calendrier.js';
 import { routesCollaborateurs } from './collaborateurs.js';
 import { routesEquipes } from './equipes.js';
 import { routesTypesAbsence } from './types-absence.js';
@@ -11,4 +12,5 @@ export async function routesAdmin(app, { pool, config, courriel }) {
   await app.register(routesEquipes, options);
   await app.register(routesCollaborateurs, options);
   await app.register(routesTypesAbsence, options);
+  await app.register(routesAdminCalendrier, options);
 }

@@ -72,6 +72,7 @@ Le schéma est décrit par les migrations de `api/migrations/`. Le conteneur `mi
 | `delegations` | Délégués habilités à valider pour une équipe |
 | `types_absence` | Types administrables : approbation, confidentialité, délai de prévenance |
 | `jours_feries`, `jours_imposes` | Calendrier : jours fériés et jours non travaillés imposés |
+| `annees_calendrier` | Années dont les jours fériés légaux ont déjà été préremplis |
 | `parametres` | Réglages : durée de conservation, mentions du PDF |
 | `sessions`, `jetons_mot_de_passe` | Sessions ouvertes et liens de mot de passe (empreintes seulement) |
 | `demandes` | Demandes d'absence et d'annulation, figées à l'insertion |
@@ -133,6 +134,17 @@ Les routes correspondantes sont sous `/api/admin` et répondent 403 à tout autr
 - Désactiver un collaborateur ferme ses sessions.
 - Une équipe ou un type d'absence déjà utilisés ne se suppriment pas : ils se désactivent.
 
+## Calendrier et durée des demandes
+
+La durée d'une demande se compte en demi-journées ouvrées : du lundi au vendredi, hors jours fériés et hors jours imposés qui concernent l'équipe du collaborateur. Une demi-journée de début ou de fin sur un jour non travaillé ne retire rien.
+
+Les directeurs administrent le calendrier depuis l'écran « Calendrier » :
+
+- **Jours fériés** : les onze jours légaux de France métropolitaine sont préremplis pour chaque année, à la première consultation, et pour l'année en cours et la suivante au démarrage de l'API. Un jour supprimé (journée de solidarité, par exemple) n'est pas recréé de lui-même ; le bouton « Rétablir les jours légaux » ne remet que les jours manquants. L'Alsace-Moselle (Vendredi saint, Saint-Étienne) n'est pas préremplie : ces jours s'ajoutent à la main.
+- **Jours imposés** : ponts et fermetures, pour toute l'entreprise ou pour une équipe et ses sous-équipes, avec ou sans décompte des congés. Le décompte effectif sur les soldes viendra avec les compteurs.
+
+Routes ouvertes à toute personne connectée : `GET /api/calendrier?debut=&fin=` (jours non travaillés de son équipe) et `POST /api/calendrier/duree` (durée d'une absence, à afficher avant la soumission). La durée définitive sera calculée par le serveur à la soumission et figée avec la demande.
+
 ## Comptes de base de données
 
 - `absences_owner` : propriétaire du schéma, réservé aux migrations.
@@ -142,4 +154,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Restent à développer : le calendrier et les paramètres, les demandes, la validation, le planning, les e-mails avec PDF et l'export.
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier (jours fériés, jours imposés, calcul de la durée) l'est aussi. Restent à développer : les paramètres (conservation, PDF), les demandes, la validation, le planning, les e-mails avec PDF et l'export.

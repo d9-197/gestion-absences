@@ -12,6 +12,8 @@ const DOUBLONS = {
   equipes_nom_unique: 'Une équipe porte déjà ce nom',
   collaborateurs_email_unique: 'Un collaborateur a déjà cette adresse e-mail',
   types_absence_libelle_unique: "Un type d'absence porte déjà ce libellé",
+  jours_feries_pkey: 'Ce jour est déjà férié',
+  jours_imposes_jour_equipe_id_key: 'Un jour imposé existe déjà à cette date pour ce périmètre',
 };
 
 // Traduit les erreurs en réponses JSON homogènes : { erreur: "message" }.
