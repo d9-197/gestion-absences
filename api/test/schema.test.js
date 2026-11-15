@@ -1,23 +1,10 @@
-// Tests du schéma contre une vraie base PostgreSQL.
-// Ignorés si TEST_DB_HOST n'est pas défini. Le compte TEST_DB_USER doit être superutilisateur :
-// chaque exécution crée une base jetable, y applique les migrations, puis la supprime.
+// Tests du schéma contre une vraie base PostgreSQL (ignorés si TEST_DB_HOST n'est pas défini).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import pg from 'pg';
 import { migrer } from '../src/migrations.js';
+import { creerBaseDeTest, hote, options } from './aide-base.js';
 
-const hote = process.env.TEST_DB_HOST;
-const options = { skip: hote ? false : 'TEST_DB_HOST non défini' };
-
-const admin = {
-  host: hote,
-  port: Number(process.env.TEST_DB_PORT ?? 5432),
-  user: process.env.TEST_DB_USER ?? 'absences_owner',
-  password: process.env.TEST_DB_PASSWORD,
-};
-const base = `absences_test_${process.pid}_${Date.now()}`;
-const compteApi = `test_api_${process.pid}`;
-
+let baseDeTest;
 let proprietaire; // compte propriétaire : comme le conteneur de migrations
 let api; // compte applicatif : comme l'API
 const ids = {};
@@ -63,17 +50,8 @@ const statut = async (demande) =>
 
 before(async () => {
   if (!hote) return;
-  const racine = new pg.Client({ ...admin, database: 'postgres' });
-  await racine.connect();
-  await racine.query(`CREATE DATABASE ${base}`);
-  await racine.query(`DO $$ BEGIN CREATE ROLE absences_api NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
-  await racine.query(`CREATE ROLE ${compteApi} LOGIN PASSWORD 'test' IN ROLE absences_api`);
-  await racine.end();
-
-  await migrer({ ...admin, database: base }, { log: () => {} });
-
-  proprietaire = new pg.Pool({ ...admin, database: base });
-  api = new pg.Pool({ ...admin, database: base, user: compteApi, password: 'test' });
+  baseDeTest = await creerBaseDeTest();
+  ({ proprietaire, api } = baseDeTest);
 
   // Jeu de données minimal, créé avec le compte applicatif.
   const equipe = async (nom, parent = null) =>
@@ -95,14 +73,7 @@ before(async () => {
 });
 
 after(async () => {
-  if (!hote) return;
-  await proprietaire?.end();
-  await api?.end();
-  const racine = new pg.Client({ ...admin, database: 'postgres' });
-  await racine.connect();
-  await racine.query(`DROP DATABASE IF EXISTS ${base} WITH (FORCE)`);
-  await racine.query(`DROP ROLE IF EXISTS ${compteApi}`);
-  await racine.end();
+  await baseDeTest?.fermer();
 });
 
 test('les données de départ sont en place', options, async () => {
@@ -256,6 +227,6 @@ test('la purge supprime les demandes anciennes avec leur journal, et rien d\'aut
 });
 
 test('relancer les migrations ne fait rien', options, async () => {
-  const appliquees = await migrer({ ...admin, database: base }, { log: () => {} });
+  const appliquees = await migrer(baseDeTest.connexionProprietaire, { log: () => {} });
   assert.equal(appliquees.length, 0);
 });

@@ -73,6 +73,7 @@ Le schéma est décrit par les migrations de `api/migrations/`. Le conteneur `mi
 | `types_absence` | Types administrables : approbation, confidentialité, délai de prévenance |
 | `jours_feries`, `jours_imposes` | Calendrier : jours fériés et jours non travaillés imposés |
 | `parametres` | Réglages : durée de conservation, mentions du PDF |
+| `sessions`, `jetons_mot_de_passe` | Sessions ouvertes et liens de mot de passe (empreintes seulement) |
 | `demandes` | Demandes d'absence et d'annulation, figées à l'insertion |
 | `evenements_demande` | Journal : soumission, approbation, refus, retrait, annulation |
 | `envois_email` | Suivi des e-mails, pour relancer les échecs |
@@ -87,6 +88,35 @@ Règles garanties par la base elle-même, et non par le code de l'API :
 - L'approbation d'une demande d'annulation fait passer la demande d'origine à « annulée ».
 - La seule suppression possible est la fonction `purger_demandes`, pour la durée de conservation.
 
+## Authentification
+
+Deux modes de connexion, selon le collaborateur :
+
+- **Mot de passe propre à l'outil** : 12 caractères au minimum, stocké haché (scrypt). Le collaborateur le choisit par un lien reçu par e-mail, depuis « Mot de passe oublié ou première connexion ». Le lien vaut une heure et ne sert qu'une fois.
+- **Compte Microsoft** : activé quand `MS_TENANT_ID`, `MS_CLIENT_ID` et `MS_CLIENT_SECRET` sont renseignés. L'application est à déclarer dans Entra ID en mono-locataire, avec l'adresse de redirection `<APP_URL>/api/auth/microsoft/retour`. À la première connexion, le compte Microsoft est rattaché au collaborateur qui a la même adresse e-mail ; aucun compte n'est créé automatiquement.
+
+La session est un cookie `HttpOnly`, valable 12 heures par défaut (`SESSION_DUREE_HEURES`). En production, `APP_URL` doit être en HTTPS : le cookie n'est pas envoyé en HTTP.
+
+Le premier directeur se crée en ligne de commande, une fois la pile démarrée :
+
+```bash
+docker compose exec api node scripts/creer-directeur.js directeur@exemple.fr Prénom Nom
+```
+
+La commande crée l'équipe « Direction », le directeur, et affiche un lien valable 72 heures pour choisir son mot de passe. Elle refuse de s'exécuter s'il existe déjà un directeur.
+
+| Route | Rôle |
+| --- | --- |
+| `POST /api/auth/connexion` | Connexion par e-mail et mot de passe |
+| `POST /api/auth/deconnexion` | Fermeture de la session |
+| `GET /api/auth/moi` | Profil de la personne connectée |
+| `GET /api/auth/config` | Indique si la connexion Microsoft est activée |
+| `POST /api/auth/mot-de-passe/oubli` | Envoi du lien par e-mail |
+| `POST /api/auth/mot-de-passe/definir` | Choix du mot de passe avec le lien |
+| `GET /api/auth/microsoft` et `/retour` | Connexion par compte Microsoft |
+
+Dans le code de l'API, une route se protège avec `preHandler: [app.authentifier, app.exigerRole('directeur')]`.
+
 ## Comptes de base de données
 
 - `absences_owner` : propriétaire du schéma, réservé aux migrations.
@@ -96,4 +126,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker et le schéma de base de données sont en place. L'API et l'interface ne font encore que vérifier la liaison entre les conteneurs : aucune fonctionnalité métier n'est développée.
+La structure Docker, le schéma de base de données et l'authentification sont en place. Une fois connecté, on n'arrive encore que sur une page d'accueil provisoire : les demandes, la validation et le planning restent à développer.

@@ -5,8 +5,29 @@ function requis(nom) {
   return valeur;
 }
 
+function microsoft() {
+  const locataire = process.env.MS_TENANT_ID;
+  const client = process.env.MS_CLIENT_ID;
+  const secret = process.env.MS_CLIENT_SECRET;
+  const renseignes = [locataire, client, secret].filter(Boolean).length;
+  if (renseignes === 0) return null; // connexion Microsoft désactivée
+  if (renseignes < 3) {
+    throw new Error('Connexion Microsoft : MS_TENANT_ID, MS_CLIENT_ID et MS_CLIENT_SECRET doivent être définis ensemble');
+  }
+  return {
+    emetteur: `https://login.microsoftonline.com/${locataire}/v2.0`,
+    clientId: client,
+    clientSecret: secret,
+  };
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
+  // Adresse publique de l'application, sans barre finale : sert aux liens des e-mails et au retour de Microsoft.
+  appUrl: requis('APP_URL').replace(/\/+$/, ''),
+  // Le cookie de session n'est envoyé qu'en HTTPS, sauf en développement.
+  cookieSecure: process.env.COOKIE_SECURE !== 'false',
+  sessionDureeHeures: Number(process.env.SESSION_DUREE_HEURES ?? 12),
   db: {
     host: requis('DB_HOST'),
     port: Number(process.env.DB_PORT ?? 5432),
@@ -22,4 +43,5 @@ export const config = {
     port: Number(process.env.SMTP_PORT ?? 25),
     from: requis('SMTP_FROM'),
   },
+  microsoft: microsoft(),
 };

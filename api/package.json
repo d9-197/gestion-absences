@@ -12,8 +12,15 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/rate-limit": "^11.2.2",
     "fastify": "^5.12.8",
     "node-pg-migrate": "^9.0.0",
+    "nodemailer": "^10.5.0",
+    "openid-client": "^6.9.0",
     "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "jose": "^6.2.17"
   }
 }

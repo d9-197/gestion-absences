@@ -17,6 +17,9 @@ services:
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_FROM: ${SMTP_FROM:-absences@example.test}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      # En développement l'application est servie en HTTP : le cookie de session doit l'accepter.
+      COOKIE_SECURE: "false"
     volumes:
       - ./api/src:/app/src:ro
     ports:

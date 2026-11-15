@@ -1,9 +1,16 @@
 import pg from 'pg';
 import { config } from './config.js';
 import { construireApp } from './app.js';
+import { creerCourriel } from './courriel.js';
+import { creerMicrosoft } from './auth/microsoft.js';
 
 const pool = new pg.Pool(config.db);
-const app = construireApp({ pool });
+const app = await construireApp({
+  pool,
+  config,
+  courriel: creerCourriel(config.smtp),
+  microsoft: config.microsoft ? creerMicrosoft({ ...config.microsoft, appUrl: config.appUrl }) : null,
+});
 
 // Une connexion inactive coupée (base redémarrée) émet une erreur sur le pool :
 // sans ce gestionnaire, elle arrêterait le processus.
