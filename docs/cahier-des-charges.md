@@ -194,7 +194,7 @@ L'outil exporte la liste des absences sur une période choisie, dans un fichier 
 | Sujet | Choix |
 | --- | --- |
 | Interface | Application web en React |
-| Serveur | API REST en JavaScript (Node.js) ; framework à choisir au démarrage |
+| Serveur | API REST en JavaScript (Node.js, Fastify) |
 | Base de données | PostgreSQL |
 | Hébergement | Conteneurs Docker dans l'infrastructure interne |
 | Authentification | Compte Microsoft ou mot de passe propre à l'outil, selon le collaborateur |

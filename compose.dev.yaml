@@ -1,0 +1,39 @@
+# Surcharge de développement : rechargement à chaud, ports ouverts en local, faux serveur SMTP.
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_PORT_LOCAL:-5432}:5432"
+
+  api:
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM: ${SMTP_FROM:-absences@example.test}
+    volumes:
+      - ./api/src:/app/src:ro
+    ports:
+      - "127.0.0.1:${API_PORT_LOCAL:-3000}:3000"
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  web:
+    build:
+      target: dev
+    volumes:
+      - ./web/src:/app/src:ro
+      - ./web/index.html:/app/index.html:ro
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-8080}:5173"
+
+  # Capture les e-mails envoyés en développement. Interface : http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT_LOCAL:-8025}:8025"
+    networks:
+      - interne
