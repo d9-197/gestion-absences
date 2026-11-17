@@ -66,7 +66,7 @@ export async function construireApp({
   });
 
   await app.register(routesAuth, { pool, config, sessions, courriel, microsoft, limites, autologin });
-  await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel });
+  await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel, aujourdhui });
   await app.register(routesCalendrier, { prefix: '/api', pool });
   await app.register(routesDemandes, { prefix: '/api', pool, aujourdhui });
   await app.register(routesPlanning, { prefix: '/api', pool });

@@ -24,8 +24,8 @@ export function ajouterMois(iso, nombre) {
 }
 
 // Date du jour dans le fuseau de l'entreprise (et non celui du serveur), au format AAAA-MM-JJ.
-export const aujourdhui = (fuseau = 'Europe/Paris') =>
-  new Intl.DateTimeFormat('sv-SE', { timeZone: fuseau }).format(new Date());
+export const aujourdhui = (fuseau = 'Europe/Paris', instant = new Date()) =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: fuseau }).format(instant);
 
 // Numéro d'une demi-journée, pour comparer des périodes : deux numéros par jour.
 export const numeroDemiJournee = (iso, demiJournee) =>

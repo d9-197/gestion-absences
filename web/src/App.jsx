@@ -13,6 +13,7 @@ import Equipes from './pages/admin/Equipes.jsx';
 import TypesAbsence from './pages/admin/TypesAbsence.jsx';
 import Calendrier from './pages/admin/Calendrier.jsx';
 import Emails from './pages/admin/Emails.jsx';
+import Conservation from './pages/admin/Conservation.jsx';
 
 // Réserve une page aux personnes connectées.
 function Protegee({ children, role }) {
@@ -41,6 +42,7 @@ function Pages() {
       <Route path="/admin/equipes" element={<Protegee role="directeur"><Equipes /></Protegee>} />
       <Route path="/admin/calendrier" element={<Protegee role="directeur"><Calendrier /></Protegee>} />
       <Route path="/admin/emails" element={<Protegee role="directeur"><Emails /></Protegee>} />
+      <Route path="/admin/conservation" element={<Protegee role="directeur"><Conservation /></Protegee>} />
       <Route path="/admin/types-absence" element={<Protegee role="directeur"><TypesAbsence /></Protegee>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

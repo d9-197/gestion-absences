@@ -43,6 +43,7 @@ export default function Cadre({ children, large = false }) {
               <NavLink to="/admin/types-absence">Types d'absence</NavLink>
               <NavLink to="/admin/calendrier">Calendrier</NavLink>
               <NavLink to="/admin/emails">E-mails</NavLink>
+              <NavLink to="/admin/conservation">Conservation</NavLink>
             </>
           )}
         </nav>

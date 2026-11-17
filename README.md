@@ -206,6 +206,26 @@ Une personne désactivée n'apparaît que si elle a des absences sur la période
 
 La route `GET /api/planning?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ` renvoie les personnes visibles, leurs absences, les fériés et les jours imposés par équipe, pour 100 jours au plus.
 
+## Conservation et purge automatique
+
+Les demandes sont conservées pendant une durée réglée par les directeurs dans l'écran « Conservation » : **12 mois par défaut**, de 1 à 120. Chaque nuit après 3 h (heure de l'entreprise), l'API **supprime définitivement** les demandes **terminées avant la date limite** (aujourd'hui moins la durée), avec leur historique et leurs envois d'e-mail. Une demande qui finit pile à la date limite est conservée, de même qu'une demande à cheval sur elle. Les PDF déjà envoyés par e-mail ne sont pas concernés : ils sont hors de l'outil.
+
+- **Une purge par jour**, même avec plusieurs processus : un verrou en base et un index unique l'imposent. Si l'API était arrêtée à 3 h, la purge du jour a lieu dès son redémarrage ; en cas d'échec, elle est retentée toutes les 15 minutes.
+- **Tout ou rien** : la purge est une seule transaction. Si la durée enregistrée est inutilisable, rien n'est supprimé et l'erreur est écrite dans les journaux.
+- **Journal des purges** : chaque exécution est consignée (date, date limite, nombre de demandes et de lignes d'historique supprimées, origine). Ce journal est en ajout seul, comme celui des demandes, et visible dans l'écran « Conservation ».
+- **Changer la durée ne supprime rien sur le moment** : les demandes concernées partent à la prochaine purge. L'écran annonce, avant l'enregistrement, combien de demandes une durée supprimerait, et demande une confirmation. La suppression est irréversible, y compris si la durée est rallongée ensuite.
+- **Effet sur la saisie** : cette durée est aussi la limite passée de la saisie, pour ne pas créer une demande qui serait aussitôt supprimée.
+- **Ménage** : la même passe nocturne supprime les sessions expirées et les liens de mot de passe périmés depuis plus de 7 jours.
+
+Pour contrôler ou déclencher la purge à la main :
+
+```bash
+docker compose exec api node scripts/purger.js              # simulation : indique ce qui serait supprimé
+docker compose exec api node scripts/purger.js --executer   # supprime vraiment, et consigne la purge
+```
+
+**Ce que la purge ne couvre pas.** Elle ne supprime que les demandes. Les fiches des collaborateurs (nom, adresse e-mail) restent, même désactivées et sans plus aucune demande : aucune règle d'effacement ou d'anonymisation n'a été définie. Les sauvegardes de la base, quand elles existeront, conserveront aussi des demandes déjà purgées. Les journaux de l'API, enfin, contiennent des noms et des identifiants.
+
 ## Export des absences
 
 L'écran « Export » (responsables et directeurs) télécharge la liste des absences qui **touchent** la période choisie, en **Excel (.xlsx)** ou en **CSV**. Filtres : période, équipe (avec ses sous-équipes), collaborateur, type, statuts. Par défaut, seules les absences valables (approuvées ou enregistrées) sont retenues.
@@ -254,4 +274,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Le planning et l'export le sont aussi. Reste à développer : la purge automatique selon la durée de conservation.
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Le planning et l'export le sont aussi. La purge automatique selon la durée de conservation l'est aussi : le cahier des charges est couvert. Restent des sujets hors cahier des charges, comme la sauvegarde, le HTTPS devant l'outil ou l'effacement des fiches de collaborateurs partis.
