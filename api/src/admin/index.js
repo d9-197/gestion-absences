@@ -6,8 +6,8 @@ import { routesTypesAbsence } from './types-absence.js';
 // Toutes les routes /api/admin sont réservées aux directeurs.
 export async function routesAdmin(app, { pool, config, courriel }) {
   const options = { pool, config, courriel };
-  app.addHook('preHandler', app.authentifier);
-  app.addHook('preHandler', app.exigerRole('directeur'));
+  app.addHook('onRequest', app.authentifier);
+  app.addHook('onRequest', app.exigerRole('directeur'));
 
   await app.register(routesEquipes, options);
   await app.register(routesCollaborateurs, options);

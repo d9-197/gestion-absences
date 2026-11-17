@@ -13,7 +13,7 @@ function verifierPeriode(debut, fin) {
 
 // Calendrier vu par la personne connectée : il dépend de son équipe.
 export async function routesCalendrier(app, { pool }) {
-  app.addHook('preHandler', app.authentifier);
+  app.addHook('onRequest', app.authentifier);
 
   app.get('/calendrier', {
     schema: { querystring: { type: 'object', required: ['debut', 'fin'], properties: { debut: date, fin: date } } },

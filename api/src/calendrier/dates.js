@@ -13,6 +13,24 @@ export function ajouterJours(iso, nombre) {
   return versIso(date);
 }
 
+export function ajouterMois(iso, nombre) {
+  const [an, mois, jour] = iso.split('-').map(Number);
+  const total = an * 12 + (mois - 1) + nombre;
+  const anneeCible = Math.floor(total / 12);
+  const moisCible = total % 12;
+  const dernierJour = new Date(Date.UTC(anneeCible, moisCible + 1, 0)).getUTCDate();
+  const deux = (n) => String(n).padStart(2, '0');
+  return `${anneeCible}-${deux(moisCible + 1)}-${deux(Math.min(jour, dernierJour))}`;
+}
+
+// Date du jour dans le fuseau de l'entreprise (et non celui du serveur), au format AAAA-MM-JJ.
+export const aujourdhui = (fuseau = 'Europe/Paris') =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: fuseau }).format(new Date());
+
+// Numéro d'une demi-journée, pour comparer des périodes : deux numéros par jour.
+export const numeroDemiJournee = (iso, demiJournee) =>
+  Math.round((versDate(iso) - versDate('2000-01-01')) / 86400000) * 2 + (demiJournee === 'apres_midi' ? 1 : 0);
+
 export const annee = (iso) => Number(iso.slice(0, 4));
 export const nombreDeJours = (debut, fin) => Math.round((versDate(fin) - versDate(debut)) / 86400000) + 1;
 

@@ -145,6 +145,31 @@ Les directeurs administrent le calendrier depuis l'écran « Calendrier » :
 
 Routes ouvertes à toute personne connectée : `GET /api/calendrier?debut=&fin=` (jours non travaillés de son équipe) et `POST /api/calendrier/duree` (durée d'une absence, à afficher avant la soumission). La durée définitive sera calculée par le serveur à la soumission et figée avec la demande.
 
+## Demandes d'absence
+
+**Saisie.** Un collaborateur saisit ses propres absences, à la demi-journée. Un responsable, un délégué ou un directeur peut saisir pour une personne qu'il peut valider ; la demande garde la trace de qui l'a saisie. Avant l'envoi, l'écran affiche la durée calculée et les avertissements (chevauchement à la demi-journée près, date passée, délai de prévenance non respecté, période sans jour ouvré). Les avertissements ne bloquent pas : ils sont recalculés par le serveur et conservés avec la demande.
+
+**Circuit.** Un type avec approbation donne une demande « en attente » ; un type sans approbation donne une déclaration « enregistrée » directement. Un seul niveau de validation, et le premier valideur qui la traite décide.
+
+**Qui valide.** La fonction SQL `valideurs_de(collaborateur)` donne les personnes habilitées : le responsable de l'équipe du collaborateur et de chaque équipe parente, leurs délégués, et tous les directeurs. Elle exclut toujours le collaborateur lui-même. Le responsable d'une équipe n'est pas validé par sa propre équipe (ni par son délégué) : sa demande remonte à l'équipe parente, à défaut aux directeurs. Si le responsable et le délégué sont absents, la demande reste visible de toute la chaîne au-dessus : aucune relance particulière n'est nécessaire.
+
+**Refus, retrait, annulation.** Le motif d'un refus est obligatoire. Le collaborateur ou la personne qui a saisi peut retirer une demande tant qu'elle est en attente. Une absence approuvée ou enregistrée se supprime en créant une demande d'annulation, liée à l'originale et validée par le même circuit ; l'absence passe à « annulée » quand l'annulation est approuvée.
+
+**Règles qui bloquent** (contrairement aux avertissements) : période incohérente, plus de 366 jours, date au-delà de l'horizon de saisie ou plus ancienne que la durée de conservation (12 mois par défaut, réglables dans `parametres`), type désactivé, collaborateur désactivé, et demande qu'aucun autre valideur ne pourrait traiter.
+
+| Route | Rôle |
+| --- | --- |
+| `GET /api/demandes?portee=mes\|gerees&statut=` | Mes demandes, ou celles que je peux traiter |
+| `GET /api/demandes/:id` | Détail et journal |
+| `GET /api/demandes/compteur` | Nombre de demandes en attente de ma décision |
+| `GET /api/demandes/types`, `/collaborateurs` | Types proposés, personnes pour lesquelles je peux saisir |
+| `POST /api/demandes/previsualisation` | Durée et avertissements, sans rien enregistrer |
+| `POST /api/demandes` | Soumission |
+| `POST /api/demandes/:id/decision` | Approbation ou refus |
+| `POST /api/demandes/:id/retrait`, `/annulation` | Retrait, demande d'annulation |
+
+Une demande n'est visible que de son collaborateur, de la personne qui l'a saisie et de ses valideurs : les autres reçoivent « introuvable ». « Aujourd'hui » se calcule dans le fuseau de l'entreprise (`FUSEAU`, `Europe/Paris` par défaut) et non celui du serveur.
+
 ## Comptes de base de données
 
 - `absences_owner` : propriétaire du schéma, réservé aux migrations.
@@ -154,4 +179,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier (jours fériés, jours imposés, calcul de la durée) l'est aussi. Restent à développer : les paramètres (conservation, PDF), les demandes, la validation, le planning, les e-mails avec PDF et l'export.
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Restent à développer : les e-mails de notification et le PDF de décision, le planning, l'export et les paramètres (conservation, mentions du PDF).

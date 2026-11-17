@@ -208,3 +208,69 @@ fieldset .case:first-of-type { margin-top: 0.25rem; }
 .majuscule::first-letter { text-transform: uppercase; }
 td.vide { color: var(--texte-doux); text-align: center; }
 section > .aide { margin: -0.5rem 0 0.75rem; }
+
+/* --- Demandes -------------------------------------------------------------- */
+
+:root {
+  --alerte-fond: #fff4d6;
+  --alerte-texte: #6b4800;
+  --attente-fond: #e6eefb;
+  --attente-texte: #1b4a96;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --alerte-fond: #4a3a10;
+    --alerte-texte: #ffe3a1;
+    --attente-fond: #1f3355;
+    --attente-texte: #b9d1fb;
+  }
+}
+
+.message.alerte { background: var(--alerte-fond); color: var(--alerte-texte); }
+.lien-bouton { display: inline-block; text-decoration: none; margin-bottom: 1.25rem; }
+
+.statut { display: inline-block; padding: 0.05rem 0.55rem; border-radius: 999px; font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.statut-en_attente { background: var(--attente-fond); color: var(--attente-texte); }
+.statut-approuvee, .statut-enregistree { background: var(--succes-fond); color: var(--succes-texte); }
+.statut-refusee { background: var(--erreur-fond); color: var(--erreur-texte); }
+.statut-retiree, .statut-annulee { background: transparent; color: var(--texte-doux); border: 1px solid var(--bord); }
+
+.pastille-alerte { color: var(--alerte-texte); background: var(--alerte-fond); border-color: transparent; }
+.sous-texte { display: block; font-size: 0.85rem; color: var(--texte-doux); }
+
+.badge {
+  display: inline-block; min-width: 1.4rem; margin-left: 0.4rem; padding: 0 0.4rem;
+  font-size: 0.8rem; font-weight: 700; text-align: center; line-height: 1.4rem;
+  color: var(--surface); background: var(--accent); border-radius: 999px;
+}
+.visuellement-cache {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+.ligne-champs { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+.ligne-champs > div { display: flex; flex-direction: column; min-width: 0; }
+textarea {
+  font: inherit; color: inherit; background: var(--fond);
+  border: 1px solid var(--bord); border-radius: 6px; padding: 0.6rem 0.7rem; resize: vertical;
+}
+textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.apercu { margin-top: 1rem; }
+.apercu .message { margin: 0.5rem 0 0; }
+.apercu-duree { margin: 0; }
+.apercu-duree span { color: var(--texte-doux); }
+
+.fiche-demande { margin: 0 0 1rem; padding: 0.9rem 1rem; }
+h3 { font-size: 1rem; margin: 1rem 0 0.5rem; }
+.journal { margin: 0 0 0.5rem; padding-left: 1.25rem; }
+.journal li { margin-bottom: 0.4rem; }
+.journal .date-journal { color: var(--texte-doux); }
+.motif-journal { display: block; color: var(--texte-doux); }
+
+.etiquette-filtre { margin-right: 0.5rem; font-weight: 600; }
+.selecteur {
+  font: inherit; color: inherit; background: var(--surface);
+  border: 1px solid var(--bord); border-radius: 6px; padding: 0.45rem 0.6rem;
+}
+
+@media (max-width: 640px) { .ligne-champs { grid-template-columns: 1fr; } }

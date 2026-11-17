@@ -39,3 +39,6 @@ export function useEnvoi() {
   }
   return { enCours, erreur, envoyer };
 }
+
+// Prévient le bandeau qu'une demande a changé, pour qu'il remette à jour le nombre de demandes à traiter.
+export const notifierChangement = () => window.dispatchEvent(new Event('demandes-changees'));

@@ -27,6 +27,8 @@ export const config = {
   appUrl: requis('APP_URL').replace(/\/+$/, ''),
   // Le cookie de session n'est envoyé qu'en HTTPS, sauf en développement.
   cookieSecure: process.env.COOKIE_SECURE !== 'false',
+  // Fuseau de l'entreprise : sert à déterminer « aujourd'hui » (jour d'une demande, délai de prévenance).
+  fuseau: process.env.FUSEAU ?? 'Europe/Paris',
   sessionDureeHeures: Number(process.env.SESSION_DUREE_HEURES ?? 12),
   db: {
     host: requis('DB_HOST'),

@@ -6,6 +6,8 @@ import { creerSessions } from './auth/sessions.js';
 import { routesAuth } from './auth/routes.js';
 import { routesAdmin } from './admin/index.js';
 import { routesCalendrier } from './calendrier/routes.js';
+import { routesDemandes } from './demandes/routes.js';
+import { aujourdhui as aujourdhuiEntreprise } from './calendrier/dates.js';
 import { gestionnaireErreurs } from './erreurs.js';
 
 const LIMITES = {
@@ -14,7 +16,11 @@ const LIMITES = {
 };
 
 // Construit l'application sans l'écouter, pour pouvoir la tester.
-export async function construireApp({ pool, config, courriel, microsoft = null, logger = true, limites = LIMITES }) {
+export async function construireApp({
+  pool, config, courriel, microsoft = null, logger = true, limites = LIMITES,
+  // Date du jour dans le fuseau de l'entreprise ; remplaçable dans les tests.
+  aujourdhui = () => aujourdhuiEntreprise(config.fuseau),
+}) {
   // L'API n'est jointe qu'à travers nginx : l'adresse du client vient de l'en-tête X-Forwarded-For.
   const app = Fastify({ logger, trustProxy: true });
   const sessions = creerSessions({ pool, config });
@@ -54,6 +60,7 @@ export async function construireApp({ pool, config, courriel, microsoft = null, 
   await app.register(routesAuth, { pool, config, sessions, courriel, microsoft, limites });
   await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel });
   await app.register(routesCalendrier, { prefix: '/api', pool });
+  await app.register(routesDemandes, { prefix: '/api', pool, aujourdhui });
 
   return app;
 }
