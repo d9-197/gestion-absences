@@ -30,6 +30,8 @@ export const config = {
   cookieSecure: cookieSecure(requis('APP_URL'), process.env.COOKIE_SECURE),
   // Fuseau de l'entreprise : sert à déterminer « aujourd'hui » (jour d'une demande, délai de prévenance).
   fuseau: process.env.FUSEAU ?? 'Europe/Paris',
+  // MODE TEST : connexion sans mot de passe depuis une liste de comptes. À ne jamais activer en production.
+  autologin: process.env.AUTOLOGIN_TEST === 'true',
   sessionDureeHeures: Number(process.env.SESSION_DUREE_HEURES ?? 12),
   db: {
     host: requis('DB_HOST'),

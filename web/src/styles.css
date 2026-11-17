@@ -274,3 +274,14 @@ h3 { font-size: 1rem; margin: 1rem 0 0.5rem; }
 }
 
 @media (max-width: 640px) { .ligne-champs { grid-template-columns: 1fr; } }
+
+/* --- Mode test (connexion sans mot de passe) ------------------------------- */
+
+.mode-test {
+  margin-bottom: 0.5rem; padding: 0.9rem 1rem;
+  background: var(--alerte-fond); color: var(--alerte-texte);
+  border: 2px dashed var(--alerte-texte); border-radius: 8px;
+}
+.mode-test p { margin: 0 0 0.25rem; }
+.mode-test .aide { color: inherit; }
+.mode-test select { background: var(--surface); color: var(--texte); }

@@ -66,6 +66,8 @@ services:
       # Vide : suit le schéma de APP_URL (Secure seulement en HTTPS).
       COOKIE_SECURE: ${COOKIE_SECURE:-}
       SESSION_DUREE_HEURES: ${SESSION_DUREE_HEURES:-12}
+      # MODE TEST : connexion sans mot de passe, depuis une liste de comptes. À laisser vide en production.
+      AUTOLOGIN_TEST: ${AUTOLOGIN_TEST:-}
       # Connexion Microsoft : désactivée si ces trois variables sont vides.
       MS_TENANT_ID: ${MS_TENANT_ID:-}
       MS_CLIENT_ID: ${MS_CLIENT_ID:-}

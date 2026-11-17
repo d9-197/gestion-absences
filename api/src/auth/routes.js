@@ -13,12 +13,40 @@ const profil = (u) => ({
   equipe: { id: Number(u.equipe_id), nom: u.equipe_nom },
 });
 
-export async function routesAuth(app, { pool, config, sessions, courriel, microsoft, limites }) {
+export async function routesAuth(app, { pool, config, sessions, courriel, microsoft, limites, autologin = false }) {
   // Vérifié même quand le compte n'existe pas, pour que le temps de réponse ne révèle rien.
   const hachageFactice = await hacher('compte inexistant');
   const cookieOidc = { path: '/api/auth/microsoft', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure };
 
-  app.get('/api/auth/config', async () => ({ microsoft: Boolean(microsoft) }));
+  app.get('/api/auth/config', async () => ({ microsoft: Boolean(microsoft), autologin }));
+
+  // MODE TEST. Ces deux routes n'existent que si AUTOLOGIN_TEST=true ; sinon elles répondent 404.
+  if (autologin) {
+    app.get('/api/auth/autologin', async () => {
+      const { rows } = await pool.query(
+        `SELECT c.id, c.prenom, c.nom, c.role, e.nom AS equipe
+         FROM collaborateurs c JOIN equipes e ON e.id = c.equipe_id
+         WHERE c.actif ORDER BY lower(c.nom), lower(c.prenom)`,
+      );
+      return rows.map((c) => ({ id: Number(c.id), prenom: c.prenom, nom: c.nom, role: c.role, equipe: c.equipe }));
+    });
+
+    app.post('/api/auth/autologin', {
+      config: { rateLimit: limites.connexion },
+      schema: {
+        body: {
+          type: 'object', required: ['collaborateurId'], additionalProperties: false,
+          properties: { collaborateurId: { type: 'integer', minimum: 1 } },
+        },
+      },
+    }, async (requete, reponse) => {
+      const { rows } = await pool.query('SELECT id FROM collaborateurs WHERE id = $1 AND actif', [requete.body.collaborateurId]);
+      if (!rows.length) return reponse.code(404).send({ erreur: 'Compte introuvable' });
+      requete.log.warn({ collaborateurId: requete.body.collaborateurId }, 'AUTOLOGIN_TEST : session ouverte sans mot de passe');
+      await sessions.ouvrir(reponse, rows[0].id);
+      return reponse.code(204).send();
+    });
+  }
 
   app.get('/api/auth/moi', { preHandler: app.authentifier }, async (requete) => profil(requete.utilisateur));
 

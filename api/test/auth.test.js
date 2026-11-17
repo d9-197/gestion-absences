@@ -288,9 +288,9 @@ test('Microsoft : état falsifié, cookie absent ou code rejoué sont refusés',
 
 test('sans configuration Microsoft, les routes répondent 404', options, async () => {
   const sans = await construireApp({ pool, config, logger: false, courriel: { envoyer: async () => {} } });
-  assert.deepEqual((await sans.inject({ method: 'GET', url: '/api/auth/config' })).json(), { microsoft: false });
+  assert.deepEqual((await sans.inject({ method: 'GET', url: '/api/auth/config' })).json(), { microsoft: false, autologin: false });
   assert.equal((await sans.inject({ method: 'GET', url: '/api/auth/microsoft' })).statusCode, 404);
-  assert.deepEqual((await get('/api/auth/config')).json(), { microsoft: true });
+  assert.deepEqual((await get('/api/auth/config')).json(), { microsoft: true, autologin: false });
   await sans.close();
 });
 

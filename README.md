@@ -114,7 +114,15 @@ docker compose exec api node scripts/lien-mot-de-passe.js alice@exemple.fr     #
 docker compose exec api node scripts/lien-mot-de-passe.js --sans-mot-de-passe  # liens pour tous les comptes sans accès
 ```
 
-Chaque lien vaut 72 heures et ne sert qu'une fois. Il n'existe volontairement pas d'équivalent dans l'application : un directeur ne peut pas y fixer le mot de passe d'une autre personne. Pour tester plusieurs rôles à la fois, ouvrez une fenêtre de navigation privée par compte : la session est un cookie, partagé entre les onglets d'un même navigateur.
+Chaque lien vaut 72 heures et ne sert qu'une fois. L'application ne permet pas à un directeur de fixer le mot de passe d'une autre personne. **Mode test.** Pour essayer l'outil sans gérer de mots de passe, `AUTOLOGIN_TEST=true` dans `.env` ajoute sur la page de connexion une liste de tous les comptes actifs : on choisit un utilisateur et on est connecté sans mot de passe.
+
+```bash
+docker compose up -d api web
+```
+
+C'est une porte ouverte : **toute personne qui atteint l'adresse peut se connecter en tant que n'importe qui, directeurs compris**, et agir sous son nom (le journal des demandes ne le distingue pas). Le mode est donc désactivé par défaut, signalé par un encadré pointillé sur la page de connexion, et l'API écrit une erreur au démarrage et un avertissement à chaque connexion. À retirer de `.env` dès les essais terminés, puis `docker compose up -d api web`.
+
+Pour tester plusieurs rôles à la fois, ouvrez une fenêtre de navigation privée par compte : la session est un cookie, partagé entre les onglets d'un même navigateur.
 
 | Route | Rôle |
 | --- | --- |

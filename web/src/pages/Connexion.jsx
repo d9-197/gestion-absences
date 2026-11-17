@@ -8,6 +8,11 @@ const ERREURS = {
   'compte-inconnu': "Votre compte Microsoft n'est rattaché à aucun collaborateur de l'outil. Contactez un directeur.",
 };
 
+const MESSAGE_SESSION_PERDUE = "Identifiants corrects, mais le navigateur n'a pas conservé la session. "
+  + "Si l'application est servie en HTTP, l'administrateur doit vérifier APP_URL et COOKIE_SECURE (voir le README).";
+
+const ROLES = { collaborateur: 'Collaborateur', responsable: 'Responsable', directeur: 'Directeur' };
+
 export default function Connexion() {
   const { utilisateur, recharger } = useSession();
   const [parametres] = useSearchParams();
@@ -16,9 +21,17 @@ export default function Connexion() {
   const [erreur, setErreur] = useState(ERREURS[parametres.get('erreur')] ?? '');
   const [enCours, setEnCours] = useState(false);
   const [microsoft, setMicrosoft] = useState(false);
+  // Mode test : liste des comptes pour se connecter sans mot de passe (null : mode désactivé).
+  const [comptesTest, setComptesTest] = useState(null);
+  const [compteTest, setCompteTest] = useState('');
 
   useEffect(() => {
-    appeler('/auth/config').then((config) => setMicrosoft(config.microsoft)).catch(() => {});
+    appeler('/auth/config')
+      .then(async (config) => {
+        setMicrosoft(config.microsoft);
+        if (config.autologin) setComptesTest(await appeler('/auth/autologin'));
+      })
+      .catch(() => {});
   }, []);
 
   if (utilisateur) return <Navigate to="/" replace />;
@@ -30,12 +43,21 @@ export default function Connexion() {
     try {
       await appeler('/auth/connexion', { methode: 'POST', corps: { email, motDePasse } });
       // Les identifiants sont bons, mais le navigateur peut refuser le cookie de session (adresse en HTTP, par exemple).
-      if (!(await recharger())) {
-        setErreur(
-          "Identifiants corrects, mais le navigateur n'a pas conservé la session. "
-          + "Si l'application est servie en HTTP, l'administrateur doit vérifier APP_URL et COOKIE_SECURE (voir le README).",
-        );
-      }
+      if (!(await recharger())) setErreur(MESSAGE_SESSION_PERDUE);
+    } catch (e) {
+      setErreur(e.message);
+    } finally {
+      setEnCours(false);
+    }
+  }
+
+  async function connecterEnTest(evenement) {
+    evenement.preventDefault();
+    setErreur('');
+    setEnCours(true);
+    try {
+      await appeler('/auth/autologin', { methode: 'POST', corps: { collaborateurId: Number(compteTest) } });
+      if (!(await recharger())) setErreur(MESSAGE_SESSION_PERDUE);
     } catch (e) {
       setErreur(e.message);
     } finally {
@@ -50,6 +72,22 @@ export default function Connexion() {
         <p className="message succes" role="status">Mot de passe enregistré. Vous pouvez vous connecter.</p>
       )}
       {erreur && <p className="message erreur" role="alert">{erreur}</p>}
+
+      {comptesTest && (
+        <form className="mode-test" onSubmit={connecterEnTest} aria-labelledby="titre-mode-test">
+          <p id="titre-mode-test"><strong>Mode test : connexion sans mot de passe</strong></p>
+          <p className="aide">Réservé aux essais. À désactiver dès qu'ils sont terminés.</p>
+          <label htmlFor="compte-test">Se connecter en tant que</label>
+          <select id="compte-test" required value={compteTest} onChange={(e) => setCompteTest(e.target.value)}>
+            <option value="">Choisir un utilisateur…</option>
+            {comptesTest.map((c) => (
+              <option key={c.id} value={c.id}>{c.prenom} {c.nom} — {ROLES[c.role]}, {c.equipe}</option>
+            ))}
+          </select>
+          <button className="bouton" type="submit" disabled={enCours || !compteTest}>Se connecter</button>
+        </form>
+      )}
+      {comptesTest && <p className="separateur">ou, avec un mot de passe</p>}
 
       {microsoft && (
         <>

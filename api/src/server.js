@@ -10,9 +10,16 @@ const app = await construireApp({
   pool,
   config,
   courriel: creerCourriel(config.smtp),
+  autologin: config.autologin,
   microsoft: config.microsoft ? creerMicrosoft({ ...config.microsoft, appUrl: config.appUrl }) : null,
 });
 
+if (config.autologin) {
+  app.log.error(
+    'AUTOLOGIN_TEST est ACTIF : toute personne qui atteint cette adresse peut se connecter sans mot de passe '
+    + 'en tant que n\'importe quel collaborateur, directeurs compris. À désactiver dès la fin des tests.',
+  );
+}
 if (config.appUrl.startsWith('http://')) {
   app.log.warn(
     `APP_URL (${config.appUrl}) est en HTTP : mots de passe et sessions circulent en clair sur le réseau. `

@@ -17,7 +17,7 @@ const LIMITES = {
 
 // Construit l'application sans l'écouter, pour pouvoir la tester.
 export async function construireApp({
-  pool, config, courriel, microsoft = null, logger = true, limites = LIMITES,
+  pool, config, courriel, microsoft = null, logger = true, limites = LIMITES, autologin = false,
   // Date du jour dans le fuseau de l'entreprise ; remplaçable dans les tests.
   aujourdhui = () => aujourdhuiEntreprise(config.fuseau),
 }) {
@@ -57,7 +57,7 @@ export async function construireApp({
     }
   });
 
-  await app.register(routesAuth, { pool, config, sessions, courriel, microsoft, limites });
+  await app.register(routesAuth, { pool, config, sessions, courriel, microsoft, limites, autologin });
   await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel });
   await app.register(routesCalendrier, { prefix: '/api', pool });
   await app.register(routesDemandes, { prefix: '/api', pool, aujourdhui });
