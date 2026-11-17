@@ -106,6 +106,16 @@ docker compose exec api node scripts/creer-directeur.js directeur@exemple.fr Pr�
 
 La commande crée l'équipe « Direction », le directeur, et affiche un lien valable 72 heures pour choisir son mot de passe. Elle refuse de s'exécuter s'il existe déjà un directeur.
 
+Pour essayer l'outil avec les comptes déjà créés, sans dépendre de l'envoi d'e-mails (serveur SMTP non configuré, par exemple), un second script génère les liens à la main :
+
+```bash
+docker compose exec api node scripts/lien-mot-de-passe.js                      # liste les comptes et leur accès
+docker compose exec api node scripts/lien-mot-de-passe.js alice@exemple.fr     # lien pour un compte
+docker compose exec api node scripts/lien-mot-de-passe.js --sans-mot-de-passe  # liens pour tous les comptes sans accès
+```
+
+Chaque lien vaut 72 heures et ne sert qu'une fois. Il n'existe volontairement pas d'équivalent dans l'application : un directeur ne peut pas y fixer le mot de passe d'une autre personne. Pour tester plusieurs rôles à la fois, ouvrez une fenêtre de navigation privée par compte : la session est un cookie, partagé entre les onglets d'un même navigateur.
+
 | Route | Rôle |
 | --- | --- |
 | `POST /api/auth/connexion` | Connexion par e-mail et mot de passe |
