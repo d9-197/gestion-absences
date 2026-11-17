@@ -4,7 +4,7 @@ import { appeler } from '../api.js';
 import { useSession } from '../session.jsx';
 
 // Bandeau commun aux pages réservées aux personnes connectées.
-export default function Cadre({ children }) {
+export default function Cadre({ children, large = false }) {
   const { utilisateur, deconnecter } = useSession();
   const valideur = utilisateur.role !== 'collaborateur';
   const directeur = utilisateur.role === 'directeur';
@@ -29,6 +29,7 @@ export default function Cadre({ children }) {
         <nav className="navigation" aria-label="Navigation principale">
           <NavLink to="/" end>Accueil</NavLink>
           <NavLink to="/demandes">Mes demandes</NavLink>
+          <NavLink to="/planning">Planning</NavLink>
           {valideur && (
             <NavLink to="/a-traiter">
               À traiter{aTraiter > 0 && <span className="badge">{aTraiter}<span className="visuellement-cache"> en attente</span></span>}
@@ -49,7 +50,7 @@ export default function Cadre({ children }) {
           <button className="bouton lien" type="button" onClick={deconnecter}>Se déconnecter</button>
         </span>
       </header>
-      <main className="page">
+      <main className={large ? 'page page-large' : 'page'}>
         {echecsEmails > 0 && (
           <p className="message erreur" role="alert">
             {echecsEmails === 1 ? "1 e-mail n'a pas pu être envoyé" : `${echecsEmails} e-mails n'ont pas pu être envoyés`}

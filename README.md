@@ -188,6 +188,24 @@ Routes ouvertes à toute personne connectée : `GET /api/calendrier?debut=&fin=`
 
 Une demande n'est visible que de son collaborateur, de la personne qui l'a saisie et de ses valideurs : les autres reçoivent « introuvable ». « Aujourd'hui » se calcule dans le fuseau de l'entreprise (`FUSEAU`, `Europe/Paris` par défaut) et non celui du serveur.
 
+## Planning
+
+L'écran « Planning » affiche un mois à la fois, par collaborateur et à la demi-journée, avec les jours fériés, les jours imposés de l'équipe et les week-ends. Les absences sont colorées par type ; les demandes **en attente** sont hachurées, pour se distinguer des absences confirmées (approuvées ou déclarées). Une vue en liste donne les mêmes informations sous forme de tableau, et chaque absence s'ouvre sur le détail de la demande.
+
+**Qui voit quoi.** Chacun voit le planning de la personne et de ceux qu'il peut valider :
+
+| Rôle | Planning visible |
+| --- | --- |
+| Collaborateur | Le sien uniquement |
+| Responsable ou délégué | Lui-même, son équipe et les sous-équipes, ainsi que celles dont il est délégué |
+| Directeur | Toute l'entreprise |
+
+Une personne désactivée n'apparaît que si elle a des absences sur la période affichée.
+
+**Confidentialité.** Le serveur ne montre le type d'une absence de type confidentiel (la maladie) qu'à la personne concernée et à ses valideurs ; pour tout autre lecteur, l'absence apparaît comme « Absent », sans type ni lien vers la demande, et la légende n'en parle pas. Avec les règles de visibilité ci-dessus, les personnes qui voient le planning d'un collaborateur sont exactement celles qui peuvent voir son type : ce masquage ne se déclenche donc aujourd'hui pour personne. Il est en place, et testé, pour le jour où la visibilité serait élargie (un planning d'équipe visible de tous, par exemple).
+
+La route `GET /api/planning?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ` renvoie les personnes visibles, leurs absences, les fériés et les jours imposés par équipe, pour 100 jours au plus.
+
 ## E-mails et PDF de décision
 
 L'outil envoie des e-mails à chaque étape du circuit. Les destinataires dépendent de l'événement :
@@ -219,4 +237,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Restent à développer : le planning, l'export et la purge automatique selon la durée de conservation.
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Le planning l'est aussi. Restent à développer : l'export et la purge automatique selon la durée de conservation.

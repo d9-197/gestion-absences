@@ -7,6 +7,7 @@ import { routesAuth } from './auth/routes.js';
 import { routesAdmin } from './admin/index.js';
 import { routesCalendrier } from './calendrier/routes.js';
 import { routesDemandes } from './demandes/routes.js';
+import { routesPlanning } from './planning/routes.js';
 import { aujourdhui as aujourdhuiEntreprise } from './calendrier/dates.js';
 import { gestionnaireErreurs } from './erreurs.js';
 import { creerFileEmails } from './emails/file.js';
@@ -67,6 +68,7 @@ export async function construireApp({
   await app.register(routesAdmin, { prefix: '/api/admin', pool, config, courriel });
   await app.register(routesCalendrier, { prefix: '/api', pool });
   await app.register(routesDemandes, { prefix: '/api', pool, aujourdhui });
+  await app.register(routesPlanning, { prefix: '/api', pool });
 
   return app;
 }
