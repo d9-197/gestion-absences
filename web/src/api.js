@@ -22,3 +22,26 @@ export async function appeler(chemin, { methode = 'GET', corps } = {}) {
   }
   return donnees;
 }
+
+// Télécharge un fichier produit par l'API (export). Une erreur revient avec son message, comme pour un appel ordinaire.
+export async function telecharger(chemin) {
+  const reponse = await fetch(`/api${chemin}`);
+  if (!reponse.ok) {
+    const donnees = await reponse.json().catch(() => null);
+    throw new ErreurApi(reponse.status, donnees?.erreur ?? 'Une erreur est survenue. Réessayez.');
+  }
+  const nom = /filename="([^"]+)"/.exec(reponse.headers.get('Content-Disposition') ?? '')?.[1] ?? 'export';
+  return { blob: await reponse.blob(), nom, lignes: Number(reponse.headers.get('X-Lignes') ?? 0) };
+}
+
+// Propose le fichier au téléchargement.
+export function enregistrerFichier({ blob, nom }) {
+  const adresse = URL.createObjectURL(blob);
+  const lien = document.createElement('a');
+  lien.href = adresse;
+  lien.download = nom;
+  document.body.append(lien);
+  lien.click();
+  lien.remove();
+  setTimeout(() => URL.revokeObjectURL(adresse), 1000);
+}

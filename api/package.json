@@ -19,9 +19,11 @@
     "nodemailer": "^10.5.0",
     "openid-client": "^6.9.0",
     "pdfkit": "^0.20.2",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
-    "jose": "^6.2.17"
+    "jose": "^6.2.17",
+    "read-excel-file": "^9.3.17"
   }
 }

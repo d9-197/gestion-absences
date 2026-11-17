@@ -358,3 +358,10 @@ button.abs:hover { filter: brightness(1.15); }
 @media (max-width: 640px) {
   .planning .nom { width: 6.5rem; min-width: 6.5rem; max-width: 6.5rem; }
 }
+
+/* --- Export ---------------------------------------------------------------- */
+
+.formulaire-large .ligne-champs { max-width: 28rem; }
+.formulaire-large select { max-width: 28rem; }
+.formulaire-large fieldset { max-width: 36rem; }
+.formulaire-large .actions { margin-top: 1.25rem; }

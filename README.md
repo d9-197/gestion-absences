@@ -206,6 +206,23 @@ Une personne désactivée n'apparaît que si elle a des absences sur la période
 
 La route `GET /api/planning?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ` renvoie les personnes visibles, leurs absences, les fériés et les jours imposés par équipe, pour 100 jours au plus.
 
+## Export des absences
+
+L'écran « Export » (responsables et directeurs) télécharge la liste des absences qui **touchent** la période choisie, en **Excel (.xlsx)** ou en **CSV**. Filtres : période, équipe (avec ses sous-équipes), collaborateur, type, statuts. Par défaut, seules les absences valables (approuvées ou enregistrées) sont retenues.
+
+**Périmètre.** Un directeur exporte toute l'entreprise, y compris ses propres absences ; un responsable ou un délégué, les absences des personnes qu'il peut valider (donc pas les siennes). Un collaborateur n'a pas accès à l'export. Les filtres ne permettent pas de sortir de ce périmètre.
+
+**Colonnes.** N° de demande, Nom, Prénom, Équipe, Type d'absence, Début et sa demi-journée, Fin et sa demi-journée, Durée en demi-journées, Statut, Valideur, Date de décision. Le valideur et la date sont ceux de la première décision (approbation, refus ou enregistrement), y compris pour une absence annulée depuis ; ils sont vides pour une demande en attente ou retirée. Les demandes d'annulation ne sont pas des lignes à part : l'absence concernée passe au statut « Annulée ». Les lignes sont triées par nom, prénom puis date de début.
+
+**Formats.**
+
+- **XLSX** : vrais nombres et vraies dates (`jj/mm/aaaa`, heure de l'entreprise), en-tête figé, largeurs de colonnes réglées.
+- **CSV** : séparateur « ; », UTF-8 avec marque d'ordre des octets et fins de ligne CRLF, pour s'ouvrir directement dans Excel en français. Dates au format `AAAA-MM-JJ`, que tout tableur reconnaît quelle que soit sa langue ; durées en entiers, sans virgule décimale.
+
+**Sécurité.** Un texte qui commencerait par `=`, `+`, `-` ou `@` n'est jamais exécuté comme une formule : il est préfixé d'une apostrophe dans le CSV, et stocké comme texte dans le XLSX. L'export contient des données personnelles, dont les absences pour maladie : chaque export est tracé dans les journaux de l'API (qui, période, filtres, nombre de lignes), mais le fichier téléchargé n'est plus sous le contrôle de l'outil.
+
+`GET /api/export/absences?debut=&fin=&format=xlsx|csv&equipeId=&collaborateurId=&typeId=&statut=a,b` renvoie le fichier (période de 731 jours au plus) ; `GET /api/export/options` donne les valeurs des filtres selon le périmètre.
+
 ## E-mails et PDF de décision
 
 L'outil envoie des e-mails à chaque étape du circuit. Les destinataires dépendent de l'événement :
@@ -237,4 +254,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Le planning l'est aussi. Restent à développer : l'export et la purge automatique selon la durée de conservation.
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Le planning et l'export le sont aussi. Reste à développer : la purge automatique selon la durée de conservation.

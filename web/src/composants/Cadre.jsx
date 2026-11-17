@@ -30,6 +30,7 @@ export default function Cadre({ children, large = false }) {
           <NavLink to="/" end>Accueil</NavLink>
           <NavLink to="/demandes">Mes demandes</NavLink>
           <NavLink to="/planning">Planning</NavLink>
+          {valideur && <NavLink to="/export">Export</NavLink>}
           {valideur && (
             <NavLink to="/a-traiter">
               À traiter{aTraiter > 0 && <span className="badge">{aTraiter}<span className="visuellement-cache"> en attente</span></span>}
