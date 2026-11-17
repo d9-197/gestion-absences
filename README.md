@@ -96,7 +96,7 @@ Deux modes de connexion, selon le collaborateur :
 - **Mot de passe propre à l'outil** : 12 caractères au minimum, stocké haché (scrypt). Le collaborateur le choisit par un lien reçu par e-mail, depuis « Mot de passe oublié ou première connexion ». Le lien vaut une heure et ne sert qu'une fois.
 - **Compte Microsoft** : activé quand `MS_TENANT_ID`, `MS_CLIENT_ID` et `MS_CLIENT_SECRET` sont renseignés. L'application est à déclarer dans Entra ID en mono-locataire, avec l'adresse de redirection `<APP_URL>/api/auth/microsoft/retour`. À la première connexion, le compte Microsoft est rattaché au collaborateur qui a la même adresse e-mail ; aucun compte n'est créé automatiquement.
 
-La session est un cookie `HttpOnly`, valable 12 heures par défaut (`SESSION_DUREE_HEURES`). En production, `APP_URL` doit être en HTTPS : le cookie n'est pas envoyé en HTTP.
+La session est un cookie `HttpOnly`, valable 12 heures par défaut (`SESSION_DUREE_HEURES`). Les navigateurs n'acceptent un cookie `Secure` qu'en HTTPS : par défaut, le cookie est `Secure` seulement si `APP_URL` commence par `https://`. `APP_URL` doit être l'adresse saisie dans le navigateur, port compris. En HTTP (essais sur le réseau local), la connexion fonctionne mais mots de passe et sessions circulent en clair : l'API le signale au démarrage, et la production doit passer par HTTPS. `COOKIE_SECURE=true` ou `false` force le réglage, mais `true` avec une adresse HTTP rend toute connexion impossible.
 
 Le premier directeur se crée en ligne de commande, une fois la pile démarrée :
 
