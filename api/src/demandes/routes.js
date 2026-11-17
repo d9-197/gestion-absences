@@ -1,5 +1,6 @@
 import { ErreurMetier, introuvable } from '../erreurs.js';
 import { transaction, parametresId } from '../admin/outils.js';
+import { enfiler } from '../emails/file.js';
 import {
   SELECTION_DEMANDE, demandeVersJson, enregistrerDemande, lireDemande, lireDemandeVisible, preparerDemande,
 } from './service.js';
@@ -128,6 +129,7 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
     if (prepare.blocage) throw new ErreurMetier(409, prepare.blocage);
     const id = await transaction(pool, (client) =>
       enregistrerDemande(client, { prepare, auteurId: moi, commentaire: requete.body.commentaire }));
+    app.fileEmails.reveiller();
     return reponse.code(201).send(demandeVersJson(await lireDemande(pool, id, moi), moi));
   });
 
@@ -152,13 +154,17 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
     if (demande.statut !== 'en_attente') throw new ErreurMetier(409, 'Cette demande a déjà été traitée ou retirée');
 
     try {
-      await pool.query(
-        'INSERT INTO evenements_demande (demande_id, type, auteur_id, motif) VALUES ($1, $2, $3, $4)',
-        [demande.id, decision, moi, decision === 'refus' ? motif : null],
-      );
+      await transaction(pool, async (client) => {
+        const evenement = await client.query(
+          'INSERT INTO evenements_demande (demande_id, type, auteur_id, motif) VALUES ($1, $2, $3, $4) RETURNING id',
+          [demande.id, decision, moi, decision === 'refus' ? motif : null],
+        );
+        await enfiler(client, evenement.rows[0].id);
+      });
     } catch (erreur) {
       dejaTraitee(erreur);
     }
+    app.fileEmails.reveiller();
     return demandeVersJson(await lireDemande(pool, demande.id, moi), moi);
   });
 
@@ -217,6 +223,7 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
     const id = await transaction(pool, (client) => enregistrerDemande(client, {
       prepare, auteurId: moi, commentaire: requete.body.commentaire, nature: 'annulation', demandeAnnuleeId: origine.id,
     }));
+    app.fileEmails.reveiller();
     return reponse.code(201).send(demandeVersJson(await lireDemande(pool, id, moi), moi));
   });
 }

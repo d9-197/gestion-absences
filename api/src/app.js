@@ -9,6 +9,7 @@ import { routesCalendrier } from './calendrier/routes.js';
 import { routesDemandes } from './demandes/routes.js';
 import { aujourdhui as aujourdhuiEntreprise } from './calendrier/dates.js';
 import { gestionnaireErreurs } from './erreurs.js';
+import { creerFileEmails } from './emails/file.js';
 
 const LIMITES = {
   connexion: { max: 10, timeWindow: '1 minute' },
@@ -24,6 +25,11 @@ export async function construireApp({
   // L'API n'est jointe qu'à travers nginx : l'adresse du client vient de l'en-tête X-Forwarded-For.
   const app = Fastify({ logger, trustProxy: true });
   const sessions = creerSessions({ pool, config });
+
+  // File des e-mails de notification et de décision (envoi en arrière-plan, nouvelles tentatives).
+  const fileEmails = creerFileEmails({ pool, courriel, config, log: app.log });
+  app.decorate('fileEmails', fileEmails);
+  app.addHook('onClose', () => fileEmails.arreter());
 
   app.setErrorHandler(gestionnaireErreurs);
 

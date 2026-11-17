@@ -51,6 +51,7 @@ for (const an of [anneeCourante, anneeCourante + 1]) {
 }
 
 try {
+  app.fileEmails.demarrer(config.emailsIntervalleSecondes * 1000);
   await app.listen({ host: '0.0.0.0', port: config.port });
 } catch (erreur) {
   app.log.error(erreur);

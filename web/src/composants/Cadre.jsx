@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink } from 'react-router';
+import { Link, NavLink } from 'react-router';
 import { appeler } from '../api.js';
 import { useSession } from '../session.jsx';
 
@@ -7,12 +7,15 @@ import { useSession } from '../session.jsx';
 export default function Cadre({ children }) {
   const { utilisateur, deconnecter } = useSession();
   const valideur = utilisateur.role !== 'collaborateur';
+  const directeur = utilisateur.role === 'directeur';
   const [aTraiter, setATraiter] = useState(0);
+  const [echecsEmails, setEchecsEmails] = useState(0);
 
   // Nombre de demandes en attente de la personne connectée, remis à jour après chaque décision.
   const actualiser = useCallback(() => {
     if (valideur) appeler('/demandes/compteur').then((r) => setATraiter(r.aTraiter)).catch(() => {});
-  }, [valideur]);
+    if (directeur) appeler('/admin/envois-email/compteur').then((r) => setEchecsEmails(r.echecs)).catch(() => {});
+  }, [valideur, directeur]);
   useEffect(() => {
     actualiser();
     window.addEventListener('demandes-changees', actualiser);
@@ -37,6 +40,7 @@ export default function Cadre({ children }) {
               <NavLink to="/admin/equipes">Équipes</NavLink>
               <NavLink to="/admin/types-absence">Types d'absence</NavLink>
               <NavLink to="/admin/calendrier">Calendrier</NavLink>
+              <NavLink to="/admin/emails">E-mails</NavLink>
             </>
           )}
         </nav>
@@ -45,7 +49,15 @@ export default function Cadre({ children }) {
           <button className="bouton lien" type="button" onClick={deconnecter}>Se déconnecter</button>
         </span>
       </header>
-      <main className="page">{children}</main>
+      <main className="page">
+        {echecsEmails > 0 && (
+          <p className="message erreur" role="alert">
+            {echecsEmails === 1 ? "1 e-mail n'a pas pu être envoyé" : `${echecsEmails} e-mails n'ont pas pu être envoyés`}
+            {' '}(décisions ou notifications). <Link to="/admin/emails">Voir et relancer</Link>
+          </p>
+        )}
+        {children}
+      </main>
     </>
   );
 }

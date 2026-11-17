@@ -47,6 +47,13 @@ export const config = {
     host: requis('SMTP_HOST'),
     port: Number(process.env.SMTP_PORT ?? 25),
     from: requis('SMTP_FROM'),
+    // Facultatifs : identifiant du serveur d'e-mail, TLS dès la connexion, certificat interne non reconnu.
+    user: process.env.SMTP_USER || undefined,
+    password: process.env.SMTP_PASSWORD || undefined,
+    secure: process.env.SMTP_SECURE === 'true',
+    verifierCertificat: process.env.SMTP_TLS_VERIFIER !== 'false',
   },
+  // Intervalle des nouvelles tentatives d'envoi, en secondes.
+  emailsIntervalleSecondes: Number(process.env.EMAILS_INTERVALLE_SECONDES ?? 15),
   microsoft: microsoft(),
 };

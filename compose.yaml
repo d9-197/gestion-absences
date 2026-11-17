@@ -61,6 +61,11 @@ services:
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST manquant dans .env}
       SMTP_PORT: ${SMTP_PORT:-25}
       SMTP_FROM: ${SMTP_FROM:?SMTP_FROM manquant dans .env}
+      # Facultatifs : identifiant du serveur d'e-mail, TLS dès la connexion (port 465), certificat interne non reconnu.
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_TLS_VERIFIER: ${SMTP_TLS_VERIFIER:-}
       # Adresse publique de l'application : liens des e-mails et retour de la connexion Microsoft.
       APP_URL: ${APP_URL:?APP_URL manquant dans .env}
       # Vide : suit le schéma de APP_URL (Secure seulement en HTTPS).

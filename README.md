@@ -188,6 +188,28 @@ Routes ouvertes à toute personne connectée : `GET /api/calendrier?debut=&fin=`
 
 Une demande n'est visible que de son collaborateur, de la personne qui l'a saisie et de ses valideurs : les autres reçoivent « introuvable ». « Aujourd'hui » se calcule dans le fuseau de l'entreprise (`FUSEAU`, `Europe/Paris` par défaut) et non celui du serveur.
 
+## E-mails et PDF de décision
+
+L'outil envoie des e-mails à chaque étape du circuit. Les destinataires dépendent de l'événement :
+
+| Événement | Destinataires | PDF |
+| --- | --- | --- |
+| Demande soumise (type avec approbation) | Les valideurs les plus proches : responsable et délégués de l'équipe du collaborateur, à défaut ceux de l'équipe parente, et ainsi de suite, à défaut les directeurs | Non |
+| Demande approuvée ou refusée | Le collaborateur, la personne qui a décidé, tous les directeurs | Oui |
+| Absence déclarée (type sans approbation) | Les mêmes valideurs, pour information ; le collaborateur et tous les directeurs reçoivent le PDF | Oui, sauf valideurs |
+| Demande d'annulation soumise, puis décidée | Comme une demande | Comme une demande |
+| Retrait d'une demande | Personne | Non |
+
+Un même e-mail n'est envoyé qu'une fois à chaque personne, et un compte désactivé ne reçoit plus rien.
+
+**Le PDF de décision** est la copie de référence, hors de l'outil, qui remplace la feuille imprimée. Il reprend la demande (collaborateur, équipe, type, période, durée en jours ouvrés, commentaire, auteur de la saisie, avertissements affichés), la décision (qui, quand, motif d'un refus), et, pour une annulation, la demande d'origine. Il est produit à partir du journal, qui ne change jamais : le renvoyer plus tard donne le même contenu. Les directeurs règlent la raison sociale et les mentions du bas de page dans « E-mails » ; un exemple de PDF s'y affiche en un clic. Il n'y a pas de logo pour l'instant.
+
+**Fiabilité.** Les e-mails sont enregistrés dans la même transaction que l'événement qui les provoque, puis envoyés en arrière-plan : une panne du serveur d'e-mail ne bloque jamais une demande et ne fait perdre aucun message. Un envoi en échec est retenté deux fois (après 1 puis 5 minutes), puis marqué « en échec ». Les directeurs en sont avertis par un bandeau et relancent depuis l'écran « E-mails », une fois la cause réparée. Le suivi (destinataire, objet, nombre de tentatives, dernière erreur) y est consultable.
+
+**Serveur d'e-mail.** `SMTP_HOST`, `SMTP_PORT` et `SMTP_FROM` suffisent pour un serveur interne ouvert. Selon le vôtre : `SMTP_USER` et `SMTP_PASSWORD` si un identifiant est exigé, `SMTP_SECURE=true` pour un TLS dès la connexion (port 465, sinon STARTTLS est utilisé quand le serveur le propose), `SMTP_TLS_VERIFIER=false` pour accepter un certificat interne non reconnu. En développement, Mailpit capture tout sur http://localhost:8025, pièces jointes comprises.
+
+La preuve par e-mail ne vaut que si personne d'autre que les destinataires n'a accès aux boîtes ni à l'administration du serveur d'e-mail (voir le cahier des charges).
+
 ## Comptes de base de données
 
 - `absences_owner` : propriétaire du schéma, réservé aux migrations.
@@ -197,4 +219,4 @@ Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-d
 
 ## État
 
-La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Restent à développer : les e-mails de notification et le PDF de décision, le planning, l'export et les paramètres (conservation, mentions du PDF).
+La structure Docker, le schéma de base de données, l'authentification et l'administration des collaborateurs, des équipes et des types d'absence sont en place. Le calendrier et le circuit des demandes (saisie, validation, retrait, annulation) le sont aussi. Les e-mails de notification et le PDF de décision le sont aussi. Restent à développer : le planning, l'export et la purge automatique selon la durée de conservation.

@@ -1,6 +1,7 @@
 import { ErreurMetier, introuvable } from '../erreurs.js';
 import { ajouterMois, calculerDuree, nombreDeJours, numeroDemiJournee } from '../calendrier/dates.js';
 import { joursNonTravailles } from '../calendrier/service.js';
+import { enfiler } from '../emails/file.js';
 
 export const PERIODE_MAX_JOURS = 366;
 
@@ -218,9 +219,11 @@ export async function enregistrerDemande(client, { prepare, auteurId, commentair
       periode.dateDebut, periode.debutDemiJournee, periode.dateFin, periode.finDemiJournee,
       duree, commentaire?.trim() || null, JSON.stringify(avertissements), auteurId],
   );
-  await client.query(
-    'INSERT INTO evenements_demande (demande_id, type, auteur_id) VALUES ($1, $2, $3)',
+  const evenement = await client.query(
+    'INSERT INTO evenements_demande (demande_id, type, auteur_id) VALUES ($1, $2, $3) RETURNING id',
     [rows[0].id, type.approbationRequise ? 'soumission' : 'enregistrement', auteurId],
   );
+  // Les e-mails sont enregistrés dans la même transaction : pas d'événement sans notification, ni l'inverse.
+  await enfiler(client, evenement.rows[0].id);
   return rows[0].id;
 }
