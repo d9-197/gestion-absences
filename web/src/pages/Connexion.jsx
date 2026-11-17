@@ -29,7 +29,13 @@ export default function Connexion() {
     setEnCours(true);
     try {
       await appeler('/auth/connexion', { methode: 'POST', corps: { email, motDePasse } });
-      await recharger();
+      // Les identifiants sont bons, mais le navigateur peut refuser le cookie de session (adresse en HTTP, par exemple).
+      if (!(await recharger())) {
+        setErreur(
+          "Identifiants corrects, mais le navigateur n'a pas conservé la session. "
+          + "Si l'application est servie en HTTP, l'administrateur doit vérifier APP_URL et COOKIE_SECURE (voir le README).",
+        );
+      }
     } catch (e) {
       setErreur(e.message);
     } finally {

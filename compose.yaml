@@ -63,7 +63,8 @@ services:
       SMTP_FROM: ${SMTP_FROM:?SMTP_FROM manquant dans .env}
       # Adresse publique de l'application : liens des e-mails et retour de la connexion Microsoft.
       APP_URL: ${APP_URL:?APP_URL manquant dans .env}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Vide : suit le schéma de APP_URL (Secure seulement en HTTPS).
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
       SESSION_DUREE_HEURES: ${SESSION_DUREE_HEURES:-12}
       # Connexion Microsoft : désactivée si ces trois variables sont vides.
       MS_TENANT_ID: ${MS_TENANT_ID:-}

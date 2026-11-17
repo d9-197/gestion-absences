@@ -10,9 +10,12 @@ export function FournisseurSession({ children }) {
 
   const recharger = useCallback(async () => {
     try {
-      setUtilisateur(await appeler('/auth/moi'));
+      const moi = await appeler('/auth/moi');
+      setUtilisateur(moi);
+      return moi;
     } catch {
       setUtilisateur(null);
+      return null;
     }
   }, []);
 

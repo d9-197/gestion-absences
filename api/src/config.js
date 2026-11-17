@@ -1,3 +1,5 @@
+import { cookieSecure } from './auth/cookie.js';
+
 // Configuration lue dans l'environnement. Une variable obligatoire absente arrête le démarrage.
 function requis(nom) {
   const valeur = process.env[nom];
@@ -25,8 +27,7 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   // Adresse publique de l'application, sans barre finale : sert aux liens des e-mails et au retour de Microsoft.
   appUrl: requis('APP_URL').replace(/\/+$/, ''),
-  // Le cookie de session n'est envoyé qu'en HTTPS, sauf en développement.
-  cookieSecure: process.env.COOKIE_SECURE !== 'false',
+  cookieSecure: cookieSecure(requis('APP_URL'), process.env.COOKIE_SECURE),
   sessionDureeHeures: Number(process.env.SESSION_DUREE_HEURES ?? 12),
   db: {
     host: requis('DB_HOST'),

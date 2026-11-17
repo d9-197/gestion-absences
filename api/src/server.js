@@ -13,6 +13,16 @@ const app = await construireApp({
   microsoft: config.microsoft ? creerMicrosoft({ ...config.microsoft, appUrl: config.appUrl }) : null,
 });
 
+if (config.appUrl.startsWith('http://')) {
+  app.log.warn(
+    `APP_URL (${config.appUrl}) est en HTTP : mots de passe et sessions circulent en clair sur le réseau. `
+    + 'À réserver aux essais ; en production, servir l\'application en HTTPS.',
+  );
+}
+if (config.cookieSecure && config.appUrl.startsWith('http://')) {
+  app.log.error('COOKIE_SECURE=true avec une adresse en HTTP : les navigateurs refuseront le cookie et personne ne pourra se connecter.');
+}
+
 // Une connexion inactive coupée (base redémarrée) émet une erreur sur le pool :
 // sans ce gestionnaire, elle arrêterait le processus.
 pool.on('error', (erreur) => app.log.error(erreur, 'connexion à la base perdue'));
