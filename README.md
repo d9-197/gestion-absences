@@ -220,6 +220,22 @@ Une personne désactivée n'apparaît que si elle a des absences sur la période
 
 La route `GET /api/planning?debut=AAAA-MM-JJ&fin=AAAA-MM-JJ` renvoie les personnes visibles, leurs absences, les fériés et les jours imposés par équipe, pour 100 jours au plus.
 
+## Tickets restaurant, télétravail et fiche RH
+
+**Ticket restaurant.** Il n'est pas saisi : il se calcule. **Un ticket est dû chaque jour travaillé** (ni week-end, ni jour férié, ni jour imposé de l'équipe) **sans aucune absence, même d'une demi-journée**, et que le salarié n'a pas retiré. Une demande d'absence en attente supprime le ticket du jour (elle peut être acceptée) ; si elle est refusée ou retirée, le ticket revient tout seul. Le télétravail ne l'enlève pas. Tous les collaborateurs sont concernés : il n'existe pas de réglage par personne.
+
+**Retrait.** Le collaborateur retire le ticket d'un jour (repas pris en charge, note de frais…) avec un motif facultatif, et peut le rétablir. Seul un jour qui donne droit au ticket peut être retiré.
+
+**Télétravail.** Simple déclaration, sans validation, visible des responsables et des directeurs. Il se déclare jour par jour ou **en série** (« tous les mardis jusqu'au… », avec annulation de série possible) ; les jours fériés, imposés et d'absence sont écartés et comptés dans la réponse, et chaque jour reste modifiable à l'unité.
+
+**Qui peut modifier, jusqu'à quand.** Le collaborateur pour lui-même, **jusqu'à la fin du mois en cours** (donc le mois en cours entier, y compris ses jours déjà passés, et les mois à venir, dans la limite de l'horizon de saisie). **Un directeur peut corriger n'importe quel jour**, après la fin du mois, dans la durée de conservation. Un responsable consulte, sans modifier.
+
+**Trace.** Les retraits et déclarations sont enregistrés dans `suivi_evenements`, en ajout seul comme les demandes : une correction ajoute un événement (« rétablissement », « annulation »), rien n'est effacé ni modifié ; l'état d'un jour est celui de son dernier événement. Ces données suivent la durée de conservation et sont emportées par la purge.
+
+**Dans le planning** (calendrier et liste). En vue calendrier, une ligne « Ticket · télétravail » sous chaque personne montre pour chaque jour un point (ticket dû), un ⊘ (ticket retiré) et un T (télétravail) ; une case à cocher la masque. Un clic sur un jour ouvre le détail du mois (retrait, rétablissement, télétravail). La vue liste donne par personne les tickets dus et retirés et les jours de télétravail, avec le même détail. Le bouton « Télétravail en série » préremplit des jours. Routes : `PUT /api/suivi/tickets`, `PUT /api/suivi/teletravail`, `POST /api/suivi/teletravail/serie` ; `GET /api/planning` renvoie `suivi` pour chaque personne.
+
+**Fiche RH du mois** (menu « Fiche RH »). Un PDF A4 intitulé « Fiche RH salarié du mois de … » : le calendrier du mois (matin à gauche, après-midi à droite de chaque case ; absences par type, télétravail T, ticket TR, jours fériés et imposés) et les compteurs. Un collaborateur télécharge la sienne ; un responsable ou un directeur, celle de chaque personne qu'il valide, ou **toutes en une fois (un PDF, une page par salarié)**. Compteurs : jours ouvrés du mois, jours travaillés (dont télétravail et sur site), jours d'absence par type, tickets restaurant dus et tickets retirés. Les jours se comptent par demi-journées : *jours travaillés + absences confirmées + demandes en attente = jours ouvrés*. **Les demandes en attente ne sont comptées ni comme travaillées ni comme absentes** : la fiche est alors marquée « provisoire », sur l'écran et sur le PDF. Une fiche n'est pas figée : elle reflète l'état au moment de l'édition ; ce qu'on veut garder se télécharge. Comme les demandes, les données d'un mois plus ancien que la durée de conservation ne sont plus disponibles. Routes : `GET /api/fiches-rh?mois=AAAA-MM&collaborateurId=` (JSON) et `GET /api/fiches-rh/pdf?mois=AAAA-MM&collaborateurIds=1,2,3` (100 au plus).
+
 ## Conservation et purge automatique
 
 Les demandes sont conservées pendant une durée réglée par les directeurs dans l'écran « Conservation » : **12 mois par défaut**, de 1 à 120. Chaque nuit après 3 h (heure de l'entreprise), l'API **supprime définitivement** les demandes **terminées avant la date limite** (aujourd'hui moins la durée), avec leur historique et leurs envois d'e-mail. Une demande qui finit pile à la date limite est conservée, de même qu'une demande à cheval sur elle. Les PDF déjà envoyés par e-mail ne sont pas concernés : ils sont hors de l'outil.

@@ -15,6 +15,6 @@ export async function routesPlanning(app, { pool }) {
     if (fin < debut) throw new ErreurMetier(400, 'La date de fin précède la date de début');
     if (nombreDeJours(debut, fin) > PERIODE_MAX_JOURS) throw new ErreurMetier(400, `Le planning est limité à ${PERIODE_MAX_JOURS} jours`);
     const moi = Number(requete.utilisateur.id);
-    return construirePlanning(pool, { moi, debut, fin, personnes: await personnesVisibles(pool, { moi, debut, fin }) });
+    return construirePlanning(pool, { moi, debut, fin, personnes: await personnesVisibles(pool, { moi, debut, fin }), directeur: requete.utilisateur.role === 'directeur' });
   });
 }

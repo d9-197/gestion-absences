@@ -1,4 +1,5 @@
 import { assurerPeriode } from '../calendrier/service.js';
+import { analyserJours, lireSuivi } from '../suivi/calcul.js';
 
 const STATUTS = ['en_attente', 'approuvee', 'enregistree'];
 
@@ -32,11 +33,11 @@ export async function personnesVisibles(db, { moi, debut, fin }) {
 // et à ses valideurs ; pour tout autre lecteur l'absence apparaît sans type ni lien vers la demande.
 // Les statuts sont ramenés à deux valeurs (« confirmee », « en_attente ») : « enregistree » ne vient que des types
 // sans approbation et trahirait, sur une absence dont le type est masqué, la nature de ce type.
-export async function construirePlanning(db, { moi, debut, fin, personnes }) {
+export async function construirePlanning(db, { moi, debut, fin, personnes, directeur = false }) {
   const ids = personnes.map((p) => Number(p.id));
   await assurerPeriode(db, debut, fin);
 
-  const [absences, valideur, feries, imposes] = await Promise.all([
+  const [absences, valideur, feries, imposes, suivi] = await Promise.all([
     db.query(
       `SELECT d.id, d.collaborateur_id, d.date_debut, d.debut_demi_journee, d.date_fin, d.fin_demi_journee, d.statut,
               t.id AS type_id, t.libelle, t.confidentiel
@@ -61,6 +62,7 @@ export async function construirePlanning(db, { moi, debut, fin, personnes }) {
        ORDER BY ji.jour`,
       [ids, debut, fin],
     ),
+    lireSuivi(db, { ids, debut, fin }),
   ]);
 
   const peutVoirLeType = new Set(valideur.rows.map((r) => Number(r.id)));
@@ -87,6 +89,23 @@ export async function construirePlanning(db, { moi, debut, fin, personnes }) {
     (imposesParEquipe[j.equipe_id] ??= []).push({ jour: j.jour, libelle: j.libelle, avecDecompte: j.avec_decompte });
   }
 
+  // Tickets restaurant et télétravail, jour par jour, pour chaque personne visible.
+  // `modifiable` dit ce que le lecteur peut changer : « tout » (directeur), « mois_courant » (soi-même), sinon rien.
+  const ferieSet = feries.rows.map((f) => f.jour);
+  const jourParPersonne = new Map(personnes.map((p) => {
+    const equipeId = Number(p.equipe_id);
+    const nonTravailles = new Set([...ferieSet, ...(imposesParEquipe[equipeId] ?? []).map((j) => j.jour)]);
+    const mesAbsences = parPersonne.get(Number(p.id)); // statuts déjà ramenés à « confirmee » ou « en_attente »
+    const s = suivi.get(Number(p.id));
+    const jours = analyserJours({ debut, fin, nonTravailles, absences: mesAbsences, retraits: s.retraits, teletravail: s.teletravail });
+    return [Number(p.id), {
+      tickets: jours.filter((j) => j.ticket === 'oui').map((j) => j.jour),
+      ticketsRetires: jours.filter((j) => j.ticket === 'retire').map((j) => ({ jour: j.jour, motif: j.motifRetrait })),
+      teletravail: jours.filter((j) => j.teletravail).map((j) => j.jour),
+      modifiable: directeur ? 'tout' : Number(p.id) === Number(moi) ? 'mois_courant' : null,
+    }];
+  }));
+
   const equipes = new Map(personnes.map((p) => [Number(p.equipe_id), p.equipe_nom]));
   return {
     debut,
@@ -98,6 +117,7 @@ export async function construirePlanning(db, { moi, debut, fin, personnes }) {
     personnes: personnes.map((p) => ({
       id: Number(p.id), prenom: p.prenom, nom: p.nom, equipeId: Number(p.equipe_id), actif: p.actif,
       absences: parPersonne.get(Number(p.id)),
+      suivi: jourParPersonne.get(Number(p.id)),
     })),
   };
 }

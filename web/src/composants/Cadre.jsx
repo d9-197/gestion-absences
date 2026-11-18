@@ -76,6 +76,7 @@ export default function Cadre({ children, large = false }) {
         <nav className="navigation" aria-label="Navigation principale">
           <NavLink to="/planning">Planning</NavLink>
           <NavLink to="/demandes">Mes demandes</NavLink>
+          <NavLink to="/fiches-rh">Fiche RH</NavLink>
           {valideur && <NavLink to="/export">Export</NavLink>}
           {valideur && (
             <NavLink to="/a-traiter">

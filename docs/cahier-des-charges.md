@@ -233,3 +233,10 @@ La phase 2 ajoutera les compteurs de congés ; quatre éléments de la phase 1 l
 - **Conservation** : une purge à un an limite l'historique disponible pour reconstituer des soldes ; à revoir au lancement de la phase 2.
 
 Les règles d'acquisition des compteurs (convention collective, accords d'entreprise) restent à recueillir pour la phase 2.
+
+## Tickets restaurant, télétravail et fiche RH (ajout du 18 novembre 2026)
+
+- Un ticket restaurant est dû chaque jour travaillé sans absence, même d'une demi-journée (une demande en attente compte comme une absence). Le télétravail n'enlève pas le ticket.
+- Le collaborateur peut retirer le ticket d'un jour. Il déclare lui-même ses jours de télétravail, à l'unité ou en série ; sans validation par le responsable.
+- Modifiable par le collaborateur jusqu'à la fin du mois ; un directeur peut corriger après la fin du mois.
+- La fiche RH mensuelle (calendrier du mois et compteurs : jours travaillés, absences par type, tickets restaurant, télétravail) se génère en PDF, individuellement ou en masse pour les responsables et les directeurs.

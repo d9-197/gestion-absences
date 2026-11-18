@@ -12,6 +12,7 @@ import Equipes from './pages/admin/Equipes.jsx';
 import TypesAbsence from './pages/admin/TypesAbsence.jsx';
 import Calendrier from './pages/admin/Calendrier.jsx';
 import Emails from './pages/admin/Emails.jsx';
+import FichesRh from './pages/FichesRh.jsx';
 import Journal from './pages/admin/Journal.jsx';
 import Conservation from './pages/admin/Conservation.jsx';
 import Compte from './pages/Compte.jsx';
@@ -42,6 +43,7 @@ function Pages() {
       <Route path="/compte" element={<Protegee><Compte /></Protegee>} />
       <Route path="/demandes" element={<Protegee><MesDemandes /></Protegee>} />
       <Route path="/planning" element={<Protegee><Planning /></Protegee>} />
+      <Route path="/fiches-rh" element={<Protegee><FichesRh /></Protegee>} />
       <Route path="/export" element={<Protegee role={['responsable', 'directeur']}><Export /></Protegee>} />
       <Route path="/a-traiter" element={<Protegee role={['responsable', 'directeur']}><ATraiter /></Protegee>} />
       <Route path="/admin/collaborateurs" element={<Protegee role="directeur"><Collaborateurs /></Protegee>} />

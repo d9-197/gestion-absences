@@ -466,3 +466,25 @@ button.abs:hover { filter: brightness(1.15); }
 .menu-admin-liste a { display: block; padding: 0.4rem 0.6rem; border-bottom: 0; border-radius: 6px; }
 .menu-admin-liste a:hover { background: var(--fond); }
 .menu-admin-liste a.active { background: var(--fond); }
+
+/* --- Tickets restaurant et télétravail ------------------------------------- */
+
+.ligne-suivi th.nom-suivi { font-weight: 400; font-size: 0.7rem; color: var(--texte-doux); }
+.ligne-suivi td.suivi-jour { height: 1.3rem; padding: 0; text-align: center; border-bottom: 1px solid var(--bord); border-left: 1px solid var(--bord); line-height: 1; }
+.ligne-suivi td.we { background: var(--planning-we); }
+.ligne-suivi td.ferie { background: var(--planning-ferie); }
+.ligne-suivi td.impose { background: var(--planning-impose); }
+.ligne-suivi td.aujourdhui { box-shadow: inset 2px 0 0 var(--accent); }
+.ligne-suivi.ligne-moi td.suivi-jour { border-bottom: 2px solid var(--accent); }
+.suivi-bouton { display: inline-flex; align-items: center; justify-content: center; gap: 2px; width: 100%; height: 1.3rem; padding: 0; font: inherit; background: none; border: 0; color: inherit; }
+button.suivi-bouton { cursor: pointer; }
+button.suivi-bouton:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+button.suivi-bouton:focus-visible { outline: 3px solid var(--texte); outline-offset: -3px; }
+.tk { color: var(--accent); font-size: 0.7rem; }
+.tk-retire { color: var(--texte-doux); font-size: 0.8rem; }
+.tt { font-size: 0.65rem; font-weight: 700; line-height: 1; border: 1px solid currentColor; border-radius: 3px; padding: 0 2px; }
+.case-barre { margin: 0; align-self: center; }
+.ligne-cible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tableau-suivi { max-height: 55vh; overflow-y: auto; margin: 0.5rem 0; }
+@media (max-width: 640px) { .ligne-suivi th.nom-suivi { font-size: 0.6rem; } }
+@media print { .ligne-suivi th.nom-suivi { font-size: 0.55rem; } .suivi-bouton { height: 1rem; } }
