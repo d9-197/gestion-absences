@@ -7,7 +7,7 @@ import Statut from './Statut.jsx';
 
 // Détail d'une demande, son journal, et les actions possibles pour la personne connectée.
 // `mode` ouvre directement le panneau de refus ou d'annulation.
-export default function DetailDemande({ id, modeInitial = null, onFermer, onChange }) {
+export default function DetailDemande({ id, modeInitial = null, onFermer, onChange, onModifier = null }) {
   const detail = useDonnees(`/demandes/${id}`);
   const [mode, setMode] = useState(modeInitial); // null | 'refus' | 'annulation'
   const [texte, setTexte] = useState('');
@@ -51,6 +51,7 @@ export default function DetailDemande({ id, modeInitial = null, onFermer, onChan
             {demande.motif && (<><dt>Motif du refus</dt><dd>{demande.motif}</dd></>)}
             {demande.commentaire && (<><dt>Commentaire</dt><dd>{demande.commentaire}</dd></>)}
             {demande.demandeAnnuleeId && (<><dt>Concerne</dt><dd>Demande n° {demande.demandeAnnuleeId}</dd></>)}
+            {demande.remplaceId && (<><dt>Remplace</dt><dd>Demande n° {demande.remplaceId}, retirée par son auteur</dd></>)}
             {demande.saisiePar.id !== demande.collaborateur.id && (
               <><dt>Saisie par</dt><dd>{nomComplet(demande.saisiePar)}</dd></>
             )}
@@ -91,6 +92,9 @@ export default function DetailDemande({ id, modeInitial = null, onFermer, onChan
             </form>
           ) : (
             <div className="actions">
+              {onModifier && demande.actions.retirer && demande.statut === 'en_attente' && demande.nature === 'absence' && (
+                <button className="bouton secondaire" type="button" onClick={() => onModifier(demande)}>Modifier</button>
+              )}
               {demande.actions.retirer && <button className="bouton secondaire" type="button" onClick={retirer} disabled={enCours}>Retirer la demande</button>}
               {demande.actions.annuler && <button className="bouton secondaire" type="button" onClick={() => setMode('annulation')}>Demander l'annulation</button>}
               {demande.actions.decider && <button className="bouton secondaire" type="button" onClick={() => setMode('refus')}>Refuser</button>}

@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
 import { FournisseurSession, useSession } from './session.jsx';
 import MesDemandes from './pages/MesDemandes.jsx';
 import Planning from './pages/Planning.jsx';
@@ -13,12 +13,17 @@ import TypesAbsence from './pages/admin/TypesAbsence.jsx';
 import Calendrier from './pages/admin/Calendrier.jsx';
 import Emails from './pages/admin/Emails.jsx';
 import Conservation from './pages/admin/Conservation.jsx';
+import Compte from './pages/Compte.jsx';
 
 // Réserve une page aux personnes connectées.
 function Protegee({ children, role }) {
-  const { utilisateur } = useSession();
+  const { utilisateur, motif } = useSession();
+  const lieu = useLocation();
   if (utilisateur === undefined) return <p className="chargement">Chargement…</p>;
-  if (utilisateur === null) return <Navigate to="/connexion" replace />;
+  // La page demandée est mémorisée pour y revenir après la connexion, sauf après une déconnexion volontaire.
+  if (utilisateur === null) {
+    return <Navigate to="/connexion" replace state={motif === 'volontaire' ? null : { depuis: lieu.pathname + lieu.search }} />;
+  }
   // Simple confort d'affichage : l'API refuse de toute façon ces routes aux autres rôles.
   if (role && ![].concat(role).includes(utilisateur.role)) return <Navigate to="/" replace />;
   return children;
@@ -33,6 +38,7 @@ function Pages() {
       <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
       <Route path="/definir-mot-de-passe" element={<DefinirMotDePasse />} />
       <Route path="/" element={<Navigate to="/planning" replace />} />
+      <Route path="/compte" element={<Protegee><Compte /></Protegee>} />
       <Route path="/demandes" element={<Protegee><MesDemandes /></Protegee>} />
       <Route path="/planning" element={<Protegee><Planning /></Protegee>} />
       <Route path="/export" element={<Protegee role={['responsable', 'directeur']}><Export /></Protegee>} />

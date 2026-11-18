@@ -3,6 +3,7 @@ import { Link, NavLink } from 'react-router';
 import { appeler } from '../api.js';
 import { useATraiter } from '../donnees.js';
 import { useSession } from '../session.jsx';
+import { ROLES } from '../pages/Compte.jsx';
 
 // Bandeau commun aux pages réservées aux personnes connectées.
 export default function Cadre({ children, large = false }) {
@@ -47,7 +48,10 @@ export default function Cadre({ children, large = false }) {
           )}
         </nav>
         <span className="bandeau-droite">
-          {utilisateur.prenom} {utilisateur.nom}
+          <Link to="/compte" className="compte" aria-label={`Mon compte : ${utilisateur.prenom} ${utilisateur.nom}, ${utilisateur.equipe.nom}, ${ROLES[utilisateur.role]}`}>
+            <span className="compte-nom">{utilisateur.prenom} {utilisateur.nom}</span>
+            <span className="compte-detail">{utilisateur.equipe.nom} · {ROLES[utilisateur.role]}</span>
+          </Link>
           <button className="bouton lien" type="button" onClick={deconnecter}>Se déconnecter</button>
         </span>
       </header>

@@ -96,6 +96,8 @@ Deux modes de connexion, selon le collaborateur :
 - **Mot de passe propre à l'outil** : 12 caractères au minimum, stocké haché (scrypt). Le collaborateur le choisit par un lien reçu par e-mail, depuis « Mot de passe oublié ou première connexion ». Le lien vaut une heure et ne sert qu'une fois.
 - **Compte Microsoft** : activé quand `MS_TENANT_ID`, `MS_CLIENT_ID` et `MS_CLIENT_SECRET` sont renseignés. L'application est à déclarer dans Entra ID en mono-locataire, avec l'adresse de redirection `<APP_URL>/api/auth/microsoft/retour`. À la première connexion, le compte Microsoft est rattaché au collaborateur qui a la même adresse e-mail ; aucun compte n'est créé automatiquement.
 
+**Écran « Mon compte »** (lien dans l'en-tête, avec nom, équipe et rôle) : profil et changement de mot de passe, absent pour un compte uniquement Microsoft. **Session expirée** : l'écran de connexion l'indique, puis ramène à la page où l'on était (chemin interne uniquement) ; une déconnexion volontaire ne le fait pas.
+
 La session est un cookie `HttpOnly`, valable 12 heures par défaut (`SESSION_DUREE_HEURES`). Les navigateurs n'acceptent un cookie `Secure` qu'en HTTPS : par défaut, le cookie est `Secure` seulement si `APP_URL` commence par `https://`. `APP_URL` doit être l'adresse saisie dans le navigateur, port compris. En HTTP (essais sur le réseau local), la connexion fonctionne mais mots de passe et sessions circulent en clair : l'API le signale au démarrage, et la production doit passer par HTTPS. `COOKIE_SECURE=true` ou `false` force le réglage, mais `true` avec une adresse HTTP rend toute connexion impossible.
 
 Le premier directeur se crée en ligne de commande, une fois la pile démarrée :
@@ -132,6 +134,7 @@ Pour tester plusieurs rôles à la fois, ouvrez une fenêtre de navigation priv�
 | `GET /api/auth/config` | Indique si la connexion Microsoft est activée |
 | `POST /api/auth/mot-de-passe/oubli` | Envoi du lien par e-mail |
 | `POST /api/auth/mot-de-passe/definir` | Choix du mot de passe avec le lien |
+| `POST /api/auth/mot-de-passe/changer` | Changement depuis « Mon compte » (mot de passe actuel requis) ; les autres sessions sont fermées et les liens non utilisés annulés |
 | `GET /api/auth/microsoft` et `/retour` | Connexion par compte Microsoft |
 
 Dans le code de l'API, une route se protège avec `preHandler: [app.authentifier, app.exigerRole('directeur')]`.
@@ -173,6 +176,8 @@ Routes ouvertes à toute personne connectée : `GET /api/calendrier?debut=&fin=`
 
 **Refus, retrait, annulation.** Le motif d'un refus est obligatoire. Le collaborateur ou la personne qui a saisi peut retirer une demande tant qu'elle est en attente. Une absence approuvée ou enregistrée se supprime en créant une demande d'annulation, liée à l'originale et validée par le même circuit ; l'absence passe à « annulée » quand l'annulation est approuvée.
 
+**Modification.** Une absence en attente se modifie par son auteur (le collaborateur ou la personne qui l'a saisie) : en une seule transaction, une nouvelle demande est créée, liée à l'ancienne (`remplace_id`), et l'ancienne est retirée avec le motif « Remplacée par la demande n° X ». Les deux restent dans l'historique ; le valideur est notifié de la nouvelle, qui indique ce qu'elle remplace (e-mail et PDF). L'aperçu ignore la demande remplacée pour ne pas signaler de chevauchement avec elle. Une demande déjà traitée ne se modifie plus (409). L'aperçu indique aussi qui devra valider.
+
 **Règles qui bloquent** (contrairement aux avertissements) : période incohérente, plus de 366 jours, date au-delà de l'horizon de saisie ou plus ancienne que la durée de conservation (12 mois par défaut, réglables dans `parametres`), type désactivé, collaborateur désactivé, et demande qu'aucun autre valideur ne pourrait traiter.
 
 | Route | Rôle |
@@ -185,6 +190,7 @@ Routes ouvertes à toute personne connectée : `GET /api/calendrier?debut=&fin=`
 | `POST /api/demandes` | Soumission |
 | `POST /api/demandes/:id/decision` | Approbation ou refus |
 | `POST /api/demandes/:id/retrait`, `/annulation` | Retrait, demande d'annulation |
+| `POST /api/demandes/:id/modification` | Modifier une absence en attente |
 
 Une demande n'est visible que de son collaborateur, de la personne qui l'a saisie et de ses valideurs : les autres reçoivent « introuvable ». « Aujourd'hui » se calcule dans le fuseau de l'entreprise (`FUSEAU`, `Europe/Paris` par défaut) et non celui du serveur.
 
@@ -192,7 +198,7 @@ Une demande n'est visible que de son collaborateur, de la personne qui l'a saisi
 
 L'écran « Planning » affiche un mois à la fois, par collaborateur et à la demi-journée, avec les jours fériés, les jours imposés de l'équipe et les week-ends. Les absences sont colorées par type ; les demandes **en attente** sont hachurées, pour se distinguer des absences confirmées (approuvées ou déclarées). Une vue en liste donne les mêmes informations sous forme de tableau, et chaque absence s'ouvre sur le détail de la demande.
 
-**Page d'arrivée et saisie.** Le planning est la page d'arrivée après la connexion (il n'y a plus de page d'accueil) et le titre de l'application y ramène. **La ligne de la personne connectée est toujours la première**, repérée par une pastille « moi » et un fond coloré, et le filtre d'équipe ne s'applique qu'aux autres lignes. **Un clic sur un jour libre** ouvre le formulaire de demande, avec ce jour comme date de départ, la demi-journée cliquée (matin ou après-midi) comme début, et la personne de la ligne cliquée pour « Pour ». Un responsable ou un directeur peut donc poser une absence pour un collaborateur en cliquant sur sa ligne, dans la limite de ce que l'API lui permet déjà. Le bouton « Nouvelle demande » ouvre le même formulaire sans date, et reste le chemin au clavier ; sur écran tactile, les cases font au moins 24 px. Les responsables et directeurs voient en tête du planning le nombre de demandes qui attendent leur décision.
+**Page d'arrivée et saisie.** Le planning est la page d'arrivée après la connexion (il n'y a plus de page d'accueil) et le titre de l'application y ramène. **La ligne de la personne connectée est toujours la première**, repérée par une pastille « moi » et un fond coloré, et le filtre d'équipe ne s'applique qu'aux autres lignes. **Un clic sur un jour libre** ouvre le formulaire de demande, avec ce jour comme date de départ, la demi-journée cliquée (matin ou après-midi) comme début, et la personne de la ligne cliquée pour « Pour ». Un responsable ou un directeur peut donc poser une absence pour un collaborateur en cliquant sur sa ligne, dans la limite de ce que l'API lui permet déjà. Le bouton « Nouvelle demande » ouvre le même formulaire sans date, et reste le chemin au clavier ; sur écran tactile, les cases font au moins 24 px. **Glisser** (souris seulement) sur une ligne choisit le début et la fin ; sur écran tactile, un appui ouvre le formulaire et la fin se règle dedans. La vue (calendrier ou liste) et le filtre d'équipe sont mémorisés dans le navigateur, par utilisateur ; sans choix, un écran de 640 px ou moins s'ouvre sur la liste. Le bouton « Imprimer » donne une page A4 paysage en couleurs claires, avec la date d'impression et le nom de l'utilisateur. « Mes demandes » sépare « À venir » et « Passées », masque par défaut les demandes refusées, retirées ou annulées, et propose Modifier, Retirer et Demander l'annulation sur chaque ligne. Les responsables et directeurs voient en tête du planning le nombre de demandes qui attendent leur décision.
 
 **Qui voit quoi.** Chacun voit le planning de la personne et de ceux qu'il peut valider :
 
@@ -273,6 +279,8 @@ La preuve par e-mail ne vaut que si personne d'autre que les destinataires n'a a
 - `absences_app` : compte utilisé par l'API. Il ne possède aucun objet ; ses droits lui viennent du groupe `absences_api`, auquel les migrations accordent les droits table par table.
 
 Le script `db/init/01-roles.sh` ne s'exécute qu'à la création du volume `db-data`. Changer un mot de passe dans `.env` après coup ne modifie pas la base.
+
+Les propositions d'ergonomie non réalisées sont dans `docs/propositions-ergonomie.md`.
 
 ## État
 

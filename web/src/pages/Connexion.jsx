@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router';
 import { appeler } from '../api.js';
 import { useSession } from '../session.jsx';
 
@@ -13,8 +13,12 @@ const MESSAGE_SESSION_PERDUE = "Identifiants corrects, mais le navigateur n'a pa
 
 const ROLES = { collaborateur: 'Collaborateur', responsable: 'Responsable', directeur: 'Directeur' };
 
+// La page demandée avant la connexion n'est reprise que si c'est une adresse interne.
+const destinationSure = (depuis) => (typeof depuis === 'string' && /^\/(?!\/)/.test(depuis) && !depuis.startsWith('/connexion') ? depuis : '/');
+
 export default function Connexion() {
-  const { utilisateur, recharger } = useSession();
+  const { utilisateur, motif, recharger } = useSession();
+  const lieu = useLocation();
   const [parametres] = useSearchParams();
   const [email, setEmail] = useState('');
   const [motDePasse, setMotDePasse] = useState('');
@@ -34,7 +38,7 @@ export default function Connexion() {
       .catch(() => {});
   }, []);
 
-  if (utilisateur) return <Navigate to="/" replace />;
+  if (utilisateur) return <Navigate to={destinationSure(lieu.state?.depuis)} replace />;
 
   async function soumettre(evenement) {
     evenement.preventDefault();
@@ -70,6 +74,9 @@ export default function Connexion() {
       <h1>Gestion des absences</h1>
       {parametres.get('motdepasse') === 'defini' && (
         <p className="message succes" role="status">Mot de passe enregistré. Vous pouvez vous connecter.</p>
+      )}
+      {motif === 'expiree' && (
+        <p className="message alerte" role="alert">Votre session a expiré. Reconnectez-vous pour reprendre là où vous en étiez.</p>
       )}
       {erreur && <p className="message erreur" role="alert">{erreur}</p>}
 

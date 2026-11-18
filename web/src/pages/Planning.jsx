@@ -6,11 +6,24 @@ import { formatPeriode, jourCourt, nomComplet } from '../format.js';
 import { useSession } from '../session.jsx';
 import Cadre from '../composants/Cadre.jsx';
 import DetailDemande from '../composants/DetailDemande.jsx';
-import FormulaireDemande from '../composants/FormulaireDemande.jsx';
+import FormulaireDemande, { initialePourModification } from '../composants/FormulaireDemande.jsx';
 
 const NOMBRE_COULEURS = 8;
 const STATUTS = { confirmee: 'Confirmée', en_attente: 'En attente' };
-const INDICE = "Cliquez sur un jour libre pour poser une absence à partir de cette date, ou utilisez « Nouvelle demande ».";
+
+// Réglages mémorisés dans le navigateur, propres à chaque utilisateur : la vue et le filtre d'équipe.
+const cleReglages = (id) => `absences:${id}:planning`;
+function lireReglages(id) {
+  try { return JSON.parse(window.localStorage.getItem(cleReglages(id))) ?? {}; } catch { return {}; }
+}
+function ecrireReglages(id, reglages) {
+  try { window.localStorage.setItem(cleReglages(id), JSON.stringify(reglages)); } catch { /* stockage indisponible : on s'en passe */ }
+}
+const petitEcran = () => window.matchMedia?.('(max-width: 640px)').matches ?? false;
+const indiceParDefaut = () => (window.matchMedia?.('(pointer: fine)').matches ?? true
+  ? 'Cliquez sur un jour libre pour poser une absence à partir de cette date (glissez pour choisir aussi le dernier jour), ou utilisez « Nouvelle demande ».'
+  : 'Touchez un jour libre pour poser une absence à partir de cette date, ou utilisez « Nouvelle demande ».');
+const demiJournee = (creneau) => (creneau % 2 ? 'après-midi' : 'matin');
 
 // Pour chaque demi-journée du mois, l'absence qui l'occupe (la confirmée l'emporte sur celle en attente).
 function creneauxDe(personne, premier, nombre) {
@@ -32,10 +45,12 @@ const classeCouleur = (absence, types) => {
 export default function Planning() {
   const { utilisateur } = useSession();
   const [mois, setMois] = useState(moisCourant);
-  const [vue, setVue] = useState('calendrier');
-  const [equipe, setEquipe] = useState('');
+  // Sans choix mémorisé, un petit écran s'ouvre sur la liste, plus lisible que la grille.
+  const [vue, setVue] = useState(() => lireReglages(utilisateur.id).vue ?? (petitEcran() ? 'liste' : 'calendrier'));
+  const [equipe, setEquipe] = useState(() => lireReglages(utilisateur.id).equipe ?? '');
   const [detail, setDetail] = useState(null);
   const [nouvelle, setNouvelle] = useState(null); // formulaire de demande ouvert depuis le planning, avec ce qu'il pré-remplit
+  const [modification, setModification] = useState(null); // demande en attente que l'on remplace
   const [info, setInfo] = useState('');
 
   const jours = useMemo(() => joursDuMois(mois.annee, mois.mois), [mois]);
@@ -45,10 +60,17 @@ export default function Planning() {
   const aujourdhuiIso = aujourdhui();
   const defilement = useRef(null);
   const indice = useRef(null);
+  const glisse = useRef(null); // balayage en cours : { ligne, personne, depart, courant } (numéros de demi-journée du mois)
+  const finGlisse = useRef(0); // instant du dernier balayage, pour ignorer le clic qui le suit
   const donnees = planning.donnees?.debut === debut ? planning.donnees : null; // pas de données d'un autre mois
 
   const seul = utilisateur.role === 'collaborateur';
   const aTraiter = useATraiter(!seul);
+
+  const choisirVue = (valeur) => { setVue(valeur); ecrireReglages(utilisateur.id, { ...lireReglages(utilisateur.id), vue: valeur }); };
+  const choisirEquipe = (valeur) => { setEquipe(valeur); ecrireReglages(utilisateur.id, { ...lireReglages(utilisateur.id), equipe: valeur }); };
+  // Un filtre mémorisé sur une équipe qu'on ne voit plus est ignoré, sans être effacé.
+  const equipeActive = donnees && donnees.equipes.some((e) => String(e.id) === String(equipe)) ? equipe : '';
 
   // Ma ligne est toujours la première et ne dépend pas du filtre d'équipe, qui ne s'applique qu'aux autres.
   const { moi, autres } = useMemo(() => {
@@ -57,9 +79,9 @@ export default function Planning() {
     const toutes = donnees.personnes.map((p) => ({ personne: p, creneaux: creneauxDe(p, premier, jours.length * 2) }));
     return {
       moi: toutes.find((l) => l.personne.id === utilisateur.id) ?? null,
-      autres: toutes.filter((l) => l.personne.id !== utilisateur.id && (!equipe || l.personne.equipeId === Number(equipe))),
+      autres: toutes.filter((l) => l.personne.id !== utilisateur.id && (!equipeActive || l.personne.equipeId === Number(equipeActive))),
     };
-  }, [donnees, equipe, debut, jours, utilisateur.id]);
+  }, [donnees, equipeActive, debut, jours, utilisateur.id]);
   const personnesParId = useMemo(() => new Map((donnees?.personnes ?? []).map((p) => [p.id, p])), [donnees]);
 
   // Sur un petit écran, la grille s'ouvre sur aujourd'hui plutôt que sur le 1er du mois.
@@ -71,7 +93,7 @@ export default function Planning() {
   }, [donnees, vue]);
 
   // L'indication sous la grille change à chaque survol : on la met à jour directement, sans refaire toute la grille.
-  useEffect(() => { if (indice.current) indice.current.textContent = INDICE; }, [donnees, vue]);
+  useEffect(() => { if (indice.current) indice.current.textContent = indiceParDefaut(); }, [donnees, vue]);
 
   const titre = seul ? 'Mon planning' : 'Planning';
   const changerMois = (pas) => { setMois(moisSuivant(mois, pas)); setInfo(''); };
@@ -79,6 +101,7 @@ export default function Planning() {
   // Un clic sur un jour libre ouvre le formulaire : ce jour (et cette demi-journée) est le départ de l'absence.
   const celluleLibre = (evenement) => evenement.target.closest?.('td[data-jour]');
   const poser = (evenement) => {
+    if (Date.now() - finGlisse.current < 500) return; // le clic qui suit un balayage a déjà été traité
     const cellule = celluleLibre(evenement);
     if (!cellule) return;
     setInfo('');
@@ -89,12 +112,53 @@ export default function Planning() {
     });
   };
   const survoler = (evenement) => {
-    if (!indice.current) return;
+    if (!indice.current || glisse.current) return;
     const cellule = celluleLibre(evenement);
-    if (!cellule) { indice.current.textContent = INDICE; return; }
+    if (!cellule) { indice.current.textContent = indiceParDefaut(); return; }
     const personne = personnesParId.get(Number(cellule.dataset.personne));
     const pour = personne && personne.id !== utilisateur.id ? ` pour ${nomComplet(personne)}` : '';
     indice.current.textContent = `Poser une absence${pour} à partir de ${jourCourt(cellule.dataset.jour)}, ${cellule.dataset.moitie === '1' ? 'après-midi' : 'matin'}`;
+  };
+
+  // Glisser sur une ligne choisit le début ET la fin : de la demi-journée d'appui à celle où l'on relâche.
+  // Réservé à la souris : au doigt, glisser fait défiler la grille, et un appui suffit à ouvrir le formulaire.
+  const periodeDe = (a, b) => {
+    const [d, f] = a <= b ? [a, b] : [b, a];
+    return { dateDebut: jours[Math.floor(d / 2)], debutDemiJournee: d % 2 ? 'apres_midi' : 'matin', dateFin: jours[Math.floor(f / 2)], finDemiJournee: f % 2 ? 'apres_midi' : 'matin' };
+  };
+  const surligner = (g) => {
+    const [d, f] = g.depart <= g.courant ? [g.depart, g.courant] : [g.courant, g.depart];
+    for (let i = 1; i < g.ligne.cells.length; i++) g.ligne.cells[i].classList.toggle('selection', i - 1 >= d && i - 1 <= f);
+  };
+  const terminerBalayage = () => {
+    const g = glisse.current;
+    glisse.current = null;
+    if (!g) return;
+    for (const cellule of g.ligne.cells) cellule.classList.remove('selection');
+    if (indice.current) indice.current.textContent = indiceParDefaut();
+    if (g.courant === g.depart) return; // un simple clic : traité par poser
+    finGlisse.current = Date.now();
+    setInfo('');
+    setNouvelle({ collaborateurId: g.personne, ...periodeDe(g.depart, g.courant) });
+  };
+  const commencerBalayage = (evenement) => {
+    if (evenement.button !== 0 || evenement.pointerType !== 'mouse') return;
+    const cellule = celluleLibre(evenement);
+    if (!cellule) return;
+    const creneau = cellule.cellIndex - 1; // la première cellule de la ligne est le nom
+    glisse.current = { ligne: cellule.parentElement, personne: Number(cellule.dataset.personne), depart: creneau, courant: creneau };
+    window.addEventListener('pointerup', terminerBalayage, { once: true });
+  };
+  const balayer = (evenement) => {
+    const g = glisse.current;
+    const cellule = evenement.target.closest?.('td.cellule');
+    if (!g || !cellule || cellule.parentElement !== g.ligne) return; // on reste sur la ligne de départ
+    g.courant = cellule.cellIndex - 1;
+    surligner(g);
+    if (indice.current && g.courant !== g.depart) {
+      const p = periodeDe(g.depart, g.courant);
+      indice.current.textContent = `Du ${jourCourt(p.dateDebut)}, ${demiJournee(g.depart <= g.courant ? g.depart : g.courant)} au ${jourCourt(p.dateFin)}, ${demiJournee(g.depart <= g.courant ? g.courant : g.depart)} inclus`;
+    }
   };
 
   function libelleAbsence(personne, absence, jour, moitie) {
@@ -147,7 +211,8 @@ export default function Planning() {
 
   const grille = donnees && (
     <div className="planning-defilant" ref={defilement}>
-      <table className="planning" onClick={poser} onMouseOver={survoler} onMouseLeave={survoler}>
+      <table className="planning" onClick={poser} onMouseOver={survoler} onMouseLeave={survoler}
+        onPointerDown={commencerBalayage} onPointerOver={balayer}>
         <caption className="visuellement-cache">{`${titre}, ${libelleMois(mois)}`}</caption>
         <thead>
           <tr>
@@ -235,16 +300,17 @@ export default function Planning() {
         {donnees && donnees.equipes.length > 1 && (
           <div>
             <label htmlFor="filtre-equipe" className="etiquette-filtre">Équipe</label>
-            <select id="filtre-equipe" className="selecteur" value={equipe} onChange={(e) => setEquipe(e.target.value)}>
+            <select id="filtre-equipe" className="selecteur" value={equipeActive} onChange={(e) => choisirEquipe(e.target.value)}>
               <option value="">Toutes les équipes</option>
               {donnees.equipes.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
             </select>
           </div>
         )}
+        <button className="bouton secondaire compact" type="button" onClick={() => window.print()}>Imprimer</button>
         <div className="choix-vue" role="group" aria-label="Affichage">
           {[['calendrier', 'Calendrier'], ['liste', 'Liste']].map(([valeur, libelle]) => (
             <button key={valeur} type="button" className={`bouton secondaire compact${vue === valeur ? ' actif' : ''}`}
-              aria-pressed={vue === valeur} onClick={() => setVue(valeur)}>{libelle}</button>
+              aria-pressed={vue === valeur} onClick={() => choisirVue(valeur)}>{libelle}</button>
           ))}
         </div>
       </div>
@@ -265,9 +331,20 @@ export default function Planning() {
             <li><span className="echantillon cellule ferie" aria-hidden="true" /> Jour férié</li>
             <li><span className="echantillon cellule impose" aria-hidden="true" /> Jour non travaillé imposé</li>
           </ul>
+          <p className="impression-pied">
+            Imprimé le {new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Paris' })} par {nomComplet(utilisateur)}.
+          </p>
         </>
       )}
 
+      {modification && (
+        <FormulaireDemande
+          remplace={modification.id}
+          initiale={initialePourModification(modification)}
+          onFermer={() => setModification(null)}
+          onEnregistre={(message) => { setModification(null); setInfo(message); planning.recharger(); }}
+        />
+      )}
       {nouvelle && (
         <FormulaireDemande
           initiale={nouvelle}
@@ -280,6 +357,7 @@ export default function Planning() {
           id={detail}
           onFermer={() => setDetail(null)}
           onChange={(message) => { setDetail(null); setInfo(message); planning.recharger(); }}
+          onModifier={(demande) => { setDetail(null); setModification(demande); }}
         />
       )}
     </Cadre>

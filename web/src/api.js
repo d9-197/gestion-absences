@@ -6,6 +6,8 @@ export class ErreurApi extends Error {
   }
 }
 
+const signalerExpiration = () => window.dispatchEvent(new Event('session-expiree'));
+
 export async function appeler(chemin, { methode = 'GET', corps } = {}) {
   const reponse = await fetch(`/api${chemin}`, {
     method: methode,
@@ -14,6 +16,8 @@ export async function appeler(chemin, { methode = 'GET', corps } = {}) {
   });
   if (reponse.status === 204) return null;
   const donnees = await reponse.json().catch(() => null);
+  // Hors connexion et profil, un 401 veut dire que la session a pris fin : l'application le sait et revient à la connexion.
+  if (reponse.status === 401 && !chemin.startsWith('/auth/')) signalerExpiration();
   if (!reponse.ok) {
     const message = reponse.status === 429
       ? 'Trop de tentatives. Réessayez dans une minute.'
@@ -28,6 +32,7 @@ export async function telecharger(chemin) {
   const reponse = await fetch(`/api${chemin}`);
   if (!reponse.ok) {
     const donnees = await reponse.json().catch(() => null);
+    if (reponse.status === 401) signalerExpiration();
     throw new ErreurApi(reponse.status, donnees?.erreur ?? 'Une erreur est survenue. Réessayez.');
   }
   const nom = /filename="([^"]+)"/.exec(reponse.headers.get('Content-Disposition') ?? '')?.[1] ?? 'export';

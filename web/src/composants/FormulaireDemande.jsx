@@ -4,21 +4,29 @@ import { useDonnees, useEnvoi, notifierChangement } from '../donnees.js';
 import { formatDuree, nomComplet } from '../format.js';
 import Dialogue, { ActionsDialogue } from './Dialogue.jsx';
 
+// Ce qui pré-remplit le formulaire quand on modifie une demande.
+export const initialePourModification = (d) => ({
+  collaborateurId: d.collaborateur.id, typeId: d.type.id,
+  dateDebut: d.dateDebut, debutDemiJournee: d.debutDemiJournee, dateFin: d.dateFin, finDemiJournee: d.finDemiJournee,
+  commentaire: d.commentaire ?? '',
+});
+
 const DEMI_JOURNEES = [['matin', 'Matin'], ['apres_midi', 'Après-midi']];
 
-// `initiale` pré-remplit le formulaire quand il s'ouvre depuis le planning : la personne, et la date de départ
-// (avec sa demi-journée) qui a été cliquée.
-export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistre }) {
+// `initiale` pré-remplit le formulaire : depuis le planning, la personne et la période cliquée ou balayée ; pour une
+// modification, toute la demande. Avec `remplace` (le numéro d'une demande en attente), l'envoi retire cette demande
+// et la remplace par la nouvelle.
+export default function FormulaireDemande({ initiale = {}, remplace = null, onFermer, onEnregistre }) {
   const types = useDonnees('/demandes/types');
   const personnes = useDonnees('/demandes/collaborateurs');
   const [champs, setChamps] = useState({
     collaborateurId: initiale.collaborateurId ? String(initiale.collaborateurId) : '',
-    typeId: '',
+    typeId: initiale.typeId ? String(initiale.typeId) : '',
     dateDebut: initiale.dateDebut ?? '',
     debutDemiJournee: initiale.debutDemiJournee ?? 'matin',
-    dateFin: initiale.dateDebut ?? '', // une seule journée par défaut : on ajuste la fin si besoin
-    finDemiJournee: 'apres_midi',
-    commentaire: '',
+    dateFin: initiale.dateFin ?? initiale.dateDebut ?? '', // une seule journée par défaut : on ajuste la fin si besoin
+    finDemiJournee: initiale.finDemiJournee ?? 'apres_midi',
+    commentaire: initiale.commentaire ?? '',
   });
   const [apercu, setApercu] = useState(null);
   const [erreurApercu, setErreurApercu] = useState('');
@@ -31,7 +39,7 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
 
   const corps = {
     typeId: Number(champs.typeId),
-    ...(pourUnAutre ? { collaborateurId } : {}),
+    ...(pourUnAutre && !remplace ? { collaborateurId } : {}),
     dateDebut: champs.dateDebut,
     debutDemiJournee: champs.debutDemiJournee,
     dateFin: champs.dateFin,
@@ -55,7 +63,7 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
       try {
         const resultat = await appeler('/demandes/previsualisation', {
           methode: 'POST',
-          corps: { ...corps, collaborateurId },
+          corps: { ...corps, collaborateurId, ...(remplace ? { remplaceId: remplace } : {}) },
         });
         if (!abandonne) { setApercu(resultat); setErreurApercu(''); }
       } catch (e) {
@@ -76,6 +84,11 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
     evenement.preventDefault();
     let message;
     const reussi = await envoyer(async () => {
+      if (remplace) {
+        await appeler(`/demandes/${remplace}/modification`, { methode: 'POST', corps });
+        message = "La demande est modifiée : l'ancienne est retirée, la nouvelle est envoyée pour validation.";
+        return;
+      }
       const demande = await appeler('/demandes', { methode: 'POST', corps: { ...corps, collaborateurId } });
       const qui = pourUnAutre ? `La demande de ${nomComplet(demande.collaborateur)}` : 'Votre demande';
       message = demande.statut === 'en_attente'
@@ -87,7 +100,7 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
 
   const chargement = !types.donnees || !personnes.donnees;
   return (
-    <Dialogue titre="Nouvelle demande d'absence" onFermer={onFermer}>
+    <Dialogue titre={remplace ? 'Modifier la demande' : "Nouvelle demande d'absence"} onFermer={onFermer}>
       {chargement ? (
         <p className={types.erreur || personnes.erreur ? 'message erreur' : 'chargement'}>
           {types.erreur || personnes.erreur || 'Chargement…'}
@@ -95,7 +108,10 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
       ) : (
         <form onSubmit={soumettre}>
           {erreur && <p className="message erreur" role="alert">{erreur}</p>}
-          {personnes.donnees.length > 1 && (
+          {remplace && (
+            <p className="aide">La demande en attente sera retirée et remplacée par celle-ci. Les deux restent dans l'historique.</p>
+          )}
+          {personnes.donnees.length > 1 && !remplace && (
             <>
               <label htmlFor="d-pour">Pour</label>
               <select id="d-pour" value={collaborateurId} onChange={modifier('collaborateurId')}>
@@ -145,7 +161,9 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
               <>
                 <p className="apercu-duree">
                   <strong>Durée : {formatDuree(apercu.dureeDemiJournees)}</strong>
-                  <span> · {apercu.approbationRequise ? 'à valider par un responsable' : 'enregistrée sans validation'}</span>
+                  <span> · {apercu.approbationRequise
+                    ? `à valider par ${apercu.valideurs.length ? apercu.valideurs.map(nomComplet).join(' ou ') : 'un responsable'}`
+                    : 'enregistrée sans validation'}</span>
                 </p>
                 {apercu.avertissements.map((a, i) => <p key={i} className="message alerte">{a.message}</p>)}
                 {apercu.avertissements.length > 0 && <p className="aide">Ces avertissements ne bloquent pas l'envoi.</p>}
@@ -156,7 +174,7 @@ export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistr
           <div className="actions">
             <button className="bouton secondaire" type="button" onClick={onFermer}>Annuler</button>
             <button className="bouton" type="submit" disabled={enCours || Boolean(apercu?.blocage)}>
-              {enCours ? 'Envoi…' : apercu && !apercu.approbationRequise ? 'Enregistrer' : 'Envoyer'}
+              {enCours ? 'Envoi…' : remplace ? 'Enregistrer la modification' : apercu && !apercu.approbationRequise ? 'Enregistrer' : 'Envoyer'}
             </button>
           </div>
         </form>

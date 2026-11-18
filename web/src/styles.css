@@ -388,3 +388,44 @@ button.abs:hover { filter: brightness(1.15); }
   .cellule { min-width: 1.5rem; height: 2.4rem; }
   .planning th.jour { min-width: 3rem; }
 }
+
+/* --- En-tête : mon compte ---------------------------------------------------- */
+
+.bandeau-droite { display: flex; align-items: center; gap: 0.75rem; }
+.compte { display: flex; flex-direction: column; line-height: 1.25; text-align: right; color: var(--texte); text-decoration: none; }
+.compte:hover .compte-nom { text-decoration: underline; }
+.compte-detail { font-size: 0.75rem; color: var(--texte-doux); }
+.bandeau-droite .bouton.lien { margin: 0; }
+
+/* --- Mes demandes ----------------------------------------------------------- */
+
+.ligne-groupe th { padding: 0.45rem 0.75rem; text-align: left; font-size: 0.85rem; color: var(--texte-doux); background: var(--fond); }
+.actions-ligne { white-space: normal; }
+.actions-ligne .bouton.lien { margin: 0 0.9rem 0 0; }
+
+/* --- Balayage à la souris et impression ---------------------------------- */
+
+.cellule.selection { background: color-mix(in srgb, var(--accent) 35%, transparent); box-shadow: inset 0 0 0 1px var(--accent); }
+.planning { user-select: none; }
+.impression-pied { display: none; }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  :root {
+    --fond: #fff; --surface: #fff; --texte: #000; --texte-doux: #333; --bord: #888; --accent: #000;
+    --type-0: #2b6cb0; --type-1: #c05621; --type-2: #2f855a; --type-3: #6b46c1;
+    --type-4: #0f766e; --type-5: #b83280; --type-6: #8a5a00; --type-7: #5b7a00; --type-cache: #4a5568;
+    --hachure: rgb(255 255 255 / 0.72);
+    --planning-we: #e9edf2; --planning-ferie: #ffe3a3; --planning-impose: #dcd2f5;
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; color: #000; }
+  .bandeau, .barre-planning, .navigation-mois button, .message, .indice-planning, .actions-ligne, .bouton { display: none !important; }
+  .page-large { width: 100%; max-width: none; margin: 0; padding: 0; }
+  .impression-pied { display: block; margin-top: 0.5rem; font-size: 0.75rem; }
+  .tableau-defilant, .planning-defilant { overflow: visible !important; }
+  .cellule { min-width: 0; width: auto; height: 1.2rem; }
+  th.nom { position: static !important; }
+  .planning { font-size: 0.65rem; }
+  tr { break-inside: avoid; }
+}
