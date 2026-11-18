@@ -24,6 +24,13 @@ const corpsDemande = {
   },
 };
 
+// L'aperçu d'une modification peut préciser la demande remplacée, pour ne pas la compter comme un chevauchement.
+const corpsApercu = { ...corpsDemande, properties: { ...corpsDemande.properties, remplaceId: { type: 'integer', minimum: 1 } } };
+
+// Corps d'une modification : celui d'une demande, sans le collaborateur, qui ne change pas.
+const { collaborateurId: _collaborateur, ...proprietesModification } = corpsDemande.properties;
+const corpsModification = { ...corpsDemande, properties: proprietesModification };
+
 // Une règle de la base (déclencheur) refuse un enchaînement impossible : la demande a changé entre-temps.
 const dejaTraitee = (erreur) => {
   if (erreur.code === '23514') throw new ErreurMetier(409, 'Cette demande a déjà été traitée ou retirée');
@@ -113,12 +120,15 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
   // --- Saisie ----------------------------------------------------------------
 
   // Ce que donnerait la soumission : durée, avertissements, circuit. N'enregistre rien.
-  app.post('/demandes/previsualisation', { schema: { body: corpsDemande } }, async (requete) => {
-    const prepare = await preparerDemande(pool, { utilisateur: requete.utilisateur, corps: requete.body, aujourdhui: aujourdhui() });
+  app.post('/demandes/previsualisation', { schema: { body: corpsApercu } }, async (requete) => {
+    const { remplaceId, ...corps } = requete.body;
+    const prepare = await preparerDemande(pool, { utilisateur: requete.utilisateur, corps, aujourdhui: aujourdhui(), ignorer: remplaceId ?? null });
     return {
       dureeDemiJournees: prepare.duree,
       avertissements: prepare.avertissements,
       approbationRequise: prepare.type.approbationRequise,
+      // Qui sera prévenu et examinera la demande (vide pour une simple déclaration).
+      valideurs: prepare.type.approbationRequise ? prepare.valideursProches : [],
       blocage: prepare.blocage,
     };
   });
@@ -185,6 +195,44 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
       dejaTraitee(erreur);
     }
     return demandeVersJson(await lireDemande(pool, demande.id, moi), moi);
+  });
+
+  // « Modifier » une demande en attente : elle est retirée et remplacée par une nouvelle, dans une même transaction.
+  // Les deux restent dans l'historique, la nouvelle portant la référence de l'ancienne.
+  app.post('/demandes/:id/modification', { schema: { params: parametresId, body: corpsModification } }, async (requete, reponse) => {
+    const moi = moiDe(requete);
+    const origine = await lireDemandeVisible(pool, requete.params.id, moi);
+    if (Number(origine.collaborateur_id) !== moi && Number(origine.saisie_par_id) !== moi) {
+      throw new ErreurMetier(403, "Seul l'auteur de la demande peut la modifier");
+    }
+    if (origine.nature !== 'absence') throw new ErreurMetier(409, "Une demande d'annulation ne se modifie pas");
+    if (origine.statut !== 'en_attente') throw new ErreurMetier(409, 'Seule une demande en attente peut être modifiée');
+
+    const prepare = await preparerDemande(pool, {
+      utilisateur: requete.utilisateur,
+      corps: { ...requete.body, collaborateurId: Number(origine.collaborateur_id) },
+      aujourdhui: aujourdhui(),
+      ignorer: Number(origine.id),
+    });
+    if (prepare.blocage) throw new ErreurMetier(409, prepare.blocage);
+
+    let id;
+    try {
+      id = await transaction(pool, async (client) => {
+        const nouvelle = await enregistrerDemande(client, {
+          prepare, auteurId: moi, commentaire: requete.body.commentaire, remplaceId: Number(origine.id),
+        });
+        await client.query(
+          `INSERT INTO evenements_demande (demande_id, type, auteur_id, motif) VALUES ($1, 'retrait', $2, $3)`,
+          [origine.id, moi, `Remplacée par la demande n° ${nouvelle}`],
+        );
+        return nouvelle;
+      });
+    } catch (erreur) {
+      dejaTraitee(erreur);
+    }
+    app.fileEmails.reveiller();
+    return reponse.code(201).send(demandeVersJson(await lireDemande(pool, id, moi), moi));
   });
 
   // Une demande approuvée ne se modifie pas : on en crée une d'annulation, validée par le même circuit.

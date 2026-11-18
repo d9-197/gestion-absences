@@ -274,6 +274,23 @@ test('une annulation suit le même circuit, et le PDF renvoie à la demande d\'o
   assert.ok(texte.includes('Projet reporté'));
 });
 
+test('une demande modifiée prévient les valideurs en citant celle qu\'elle remplace', options, async () => {
+  const ancienne = await demander('alice', { dateDebut: '2027-09-06', dateFin: '2027-09-10' });
+  await envoyer();
+  const reponse = await appel('alice', 'POST', `/api/demandes/${ancienne.id}/modification`, { typeId: ids.conges, dateDebut: '2027-09-13', dateFin: '2027-09-17' });
+  assert.equal(reponse.statusCode, 201);
+  const nouvelle = reponse.json();
+  // Le retrait de l'ancienne n'envoie rien ; la nouvelle prévient comme toute demande, en précisant ce qu'elle remplace.
+  const messages = await envoyer();
+  assert.deepEqual(destinataires(messages), [adresse('carla'), adresse('dan')]);
+  assert.match(messages[0].texte, new RegExp(`Cette demande remplace la demande n° ${ancienne.id}, retirée par son auteur`));
+  assert.match(messages[0].sujet, /^Demande à traiter : Alice Durand - Congés payés, 13\/09\/2027 au 17\/09\/2027$/);
+  // Le PDF de la décision garde le lien avec la demande remplacée.
+  await decider('carla', nouvelle.id, 'approbation');
+  const decisions = await envoyer();
+  assert.ok(texteDuPdf(decisions[0].pieces[0].content).includes(`Demande n° ${ancienne.id}, retirée par son auteur`));
+});
+
 test('un retrait n\'envoie aucun e-mail', options, async () => {
   const demande = await demander('chloe', { dateDebut: '2027-04-05', dateFin: '2027-04-05' });
   await envoyer();

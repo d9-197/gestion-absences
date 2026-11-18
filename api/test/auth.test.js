@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { construireApp } from '../src/app.js';
 import { creerMicrosoft } from '../src/auth/microsoft.js';
+import { empreinte } from '../src/auth/jetons.js';
 import { creerBaseDeTest, hote, options } from './aide-base.js';
 import { demarrerFauxMicrosoft } from './faux-microsoft.js';
 
@@ -92,7 +93,7 @@ test('parcours complet : lien par e-mail, mot de passe, connexion, profil', opti
   assert.equal(moi.statusCode, 200);
   assert.deepEqual(moi.json(), {
     id: Number(ids.alice), email: 'alice@exemple.test', nom: 'Test', prenom: 'Alice',
-    role: 'collaborateur', equipe: { id: Number(ids.equipe), nom: 'Direction' },
+    role: 'collaborateur', equipe: { id: Number(ids.equipe), nom: 'Direction' }, aMotDePasse: true,
   });
 });
 
@@ -147,6 +148,55 @@ test('changer le mot de passe ferme les sessions ouvertes', options, async () =>
   assert.equal((await connecter('alice@exemple.test')).statusCode, 401);
   assert.equal((await connecter('alice@exemple.test', 'un nouveau mot de passe')).statusCode, 204);
   await definirMotDePasse('alice@exemple.test'); // remet le mot de passe des autres tests
+});
+
+test('changer son mot de passe : exige l\'actuel, ferme les autres sessions et prévient par e-mail', options, async () => {
+  const principale = await connecter('alice@exemple.test');
+  const autre = await connecter('alice@exemple.test');
+  const corps = { motDePasseActuel: MOT_DE_PASSE, nouveauMotDePasse: 'un tout nouveau mot de passe' };
+  const changer = (payload, cookies) => post('/api/auth/mot-de-passe/changer', payload, cookies);
+
+  // Sans connexion : 401. Les autres refus sont des 400, jamais des 401 (réservés à « session expirée »).
+  assert.equal((await changer(corps)).statusCode, 401);
+  const faux = await changer({ ...corps, motDePasseActuel: 'pas le bon mot de passe' }, session(principale));
+  assert.equal(faux.statusCode, 400);
+  assert.equal(faux.json().erreur, 'Mot de passe actuel incorrect');
+  assert.equal((await changer({ ...corps, nouveauMotDePasse: MOT_DE_PASSE }, session(principale))).statusCode, 400);
+  assert.equal((await changer({ ...corps, nouveauMotDePasse: 'trop court' }, session(principale))).statusCode, 400);
+  assert.equal((await connecter('alice@exemple.test')).statusCode, 204); // rien n'a changé
+
+  courriels.length = 0;
+  assert.equal((await changer(corps, session(principale))).statusCode, 204);
+  assert.equal((await get('/api/auth/moi', session(principale))).statusCode, 200); // la session courante reste ouverte
+  assert.equal((await get('/api/auth/moi', session(autre))).statusCode, 401); // les autres sont fermées
+  assert.equal((await connecter('alice@exemple.test')).statusCode, 401);
+  assert.equal((await connecter('alice@exemple.test', 'un tout nouveau mot de passe')).statusCode, 204);
+  assert.equal(courriels.length, 1);
+  assert.equal(courriels[0].a, 'alice@exemple.test');
+  assert.match(courriels[0].texte, /mot de passe de votre compte vient d'être modifié/);
+  await definirMotDePasse('alice@exemple.test'); // remet le mot de passe des autres tests
+});
+
+test('changer son mot de passe annule les liens de mot de passe en cours', options, async () => {
+  const connexion = await connecter('alice@exemple.test');
+  courriels.length = 0;
+  await post('/api/auth/mot-de-passe/oubli', { email: 'alice@exemple.test' });
+  const jeton = new URL(courriels[0].texte.match(/http\S+/)[0]).searchParams.get('jeton');
+  const changement = await post('/api/auth/mot-de-passe/changer',
+    { motDePasseActuel: MOT_DE_PASSE, nouveauMotDePasse: 'encore un autre mot de passe' }, session(connexion));
+  assert.equal(changement.statusCode, 204);
+  assert.equal((await post('/api/auth/mot-de-passe/definir', { jeton, motDePasse: 'un mot de passe pris en otage' })).statusCode, 400);
+  await definirMotDePasse('alice@exemple.test');
+});
+
+test('un compte sans mot de passe est signalé et ne peut pas en « changer »', options, async () => {
+  const id = await creerCompte('Dora');
+  await pool.query(`INSERT INTO sessions (jeton_hash, collaborateur_id, expire_le) VALUES ($1, $2, now() + interval '1 hour')`, [empreinte('jeton-de-dora'), id]);
+  const cookies = { absences_session: 'jeton-de-dora' };
+  assert.equal((await get('/api/auth/moi', cookies)).json().aMotDePasse, false);
+  const reponse = await post('/api/auth/mot-de-passe/changer', { motDePasseActuel: 'x', nouveauMotDePasse: 'un mot de passe solide 2' }, cookies);
+  assert.equal(reponse.statusCode, 400);
+  assert.match(reponse.json().erreur, /n'a pas de mot de passe/);
 });
 
 test('la déconnexion invalide la session côté serveur', options, async () => {

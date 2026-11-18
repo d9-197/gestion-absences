@@ -356,6 +356,122 @@ test('une demande peut être saisie puis traitée par la même personne, sans ê
   assert.deepEqual(detail.journal.map((e) => [e.type, e.auteur.id]), [['soumission', ids.carla], ['approbation', ids.carla]]);
 });
 
+// --- Aperçu : qui examinera la demande ---------------------------------------
+
+test('l\'aperçu annonce qui examinera la demande', options, async () => {
+  const apercu = async (qui, corps = {}) => (await appel(qui, 'POST', '/api/demandes/previsualisation',
+    { typeId: ids.conges, dateDebut: '2027-06-07', dateFin: '2027-06-07', ...corps })).json();
+  const prenoms = (a) => a.valideurs.map((v) => v.prenom);
+  assert.deepEqual(prenoms(await apercu('alice')), ['carla', 'dan']); // responsable et délégué de son équipe
+  assert.deepEqual(prenoms(await apercu('carla')), ['bob']); // un responsable remonte à l'équipe parente
+  assert.deepEqual(prenoms(await apercu('diane')), ['eric']); // un directeur : les autres directeurs
+  // Pour un autre, ce sont ceux du collaborateur concerné.
+  assert.deepEqual(prenoms(await apercu('bob', { collaborateurId: ids.alice })), ['carla', 'dan']);
+  assert.deepEqual((await apercu('alice')).valideurs[0], { prenom: 'carla', nom: 'carla' });
+  // Une simple déclaration n'est examinée par personne.
+  assert.deepEqual((await apercu('alice', { typeId: ids.maladie })).valideurs, []);
+});
+
+// --- Modification d'une demande en attente -----------------------------------
+
+const modifier = (qui, id, corps) => appel(qui, 'POST', `/api/demandes/${id}/modification`, { typeId: ids.conges, ...corps });
+
+test('modifier une demande en attente : elle est retirée et remplacée, avec la référence', options, async () => {
+  const ancienne = await demander('alice', { dateDebut: '2027-07-05', dateFin: '2027-07-09', commentaire: 'Premier jet' });
+  // La nouvelle période chevauche l'ancienne : ce n'est pas un avertissement, puisque l'ancienne est remplacée.
+  const reponse = await modifier('alice', ancienne.id, { dateDebut: '2027-07-07', dateFin: '2027-07-13', commentaire: ' Version corrigée ' });
+  assert.equal(reponse.statusCode, 201, reponse.body);
+  const nouvelle = reponse.json();
+  assert.equal(nouvelle.statut, 'en_attente');
+  assert.equal(nouvelle.remplaceId, ancienne.id);
+  assert.equal(nouvelle.dateDebut, '2027-07-07');
+  assert.equal(nouvelle.dureeDemiJournees, 10);
+  assert.equal(nouvelle.commentaire, 'Version corrigée');
+  assert.deepEqual(nouvelle.avertissements, []);
+  assert.equal(nouvelle.collaborateur.id, ids.alice);
+
+  // L'ancienne reste dans l'historique, retirée, avec le renvoi vers la nouvelle.
+  const retiree = await lire('alice', ancienne.id);
+  assert.equal(retiree.statut, 'retiree');
+  assert.equal(retiree.remplaceId, null);
+  const dernier = retiree.journal.at(-1);
+  assert.deepEqual([dernier.type, dernier.motif, dernier.auteur.id], ['retrait', `Remplacée par la demande n° ${nouvelle.id}`, ids.alice]);
+  // La nouvelle est une demande ordinaire : elle se décide, se retire, s'annule.
+  assert.equal((await decider('carla', nouvelle.id, 'approbation')).json().statut, 'approuvee');
+});
+
+test('une modification ne laisse jamais la demande d\'origine à moitié modifiée', options, async () => {
+  const ancienne = await demander('alice', { dateDebut: '2027-07-19', dateFin: '2027-07-23' });
+  for (const corps of [{ typeId: 99999 }, { dateDebut: '2027-07-24', dateFin: '2027-07-20' }, { dateDebut: '2029-01-01', dateFin: '2029-01-02' }]) {
+    const refus = await modifier('alice', ancienne.id, { dateDebut: '2027-07-19', dateFin: '2027-07-23', ...corps });
+    assert.equal(refus.statusCode, 400, JSON.stringify(corps));
+  }
+  assert.equal((await lire('alice', ancienne.id)).statut, 'en_attente');
+  const { rows } = await pool.query('SELECT count(*)::int AS n FROM demandes WHERE remplace_id = $1', [ancienne.id]);
+  assert.equal(rows[0].n, 0);
+});
+
+test('l\'aperçu d\'une modification ne compte pas la demande remplacée comme un chevauchement', options, async () => {
+  const ancienne = await demander('alice', { dateDebut: '2027-10-04', dateFin: '2027-10-08' });
+  const corps = { typeId: ids.conges, dateDebut: '2027-10-05', dateFin: '2027-10-06' };
+  const ordinaire = (await appel('alice', 'POST', '/api/demandes/previsualisation', corps)).json();
+  assert.deepEqual(ordinaire.avertissements.map((a) => a.code), ['chevauchement']);
+  const modification = (await appel('alice', 'POST', '/api/demandes/previsualisation', { ...corps, remplaceId: ancienne.id })).json();
+  assert.deepEqual(modification.avertissements, []);
+});
+
+test('une demande modifiée garde ses avertissements propres, et ceux des autres demandes', options, async () => {
+  const autre = await demander('alice', { dateDebut: '2027-08-09', dateFin: '2027-08-10' });
+  const ancienne = await demander('alice', { dateDebut: '2027-08-16', dateFin: '2027-08-17' });
+  const nouvelle = (await modifier('alice', ancienne.id, { dateDebut: '2027-08-10', dateFin: '2027-08-11' })).json();
+  assert.deepEqual(nouvelle.avertissements.map((a) => a.code), ['chevauchement']);
+  assert.equal(nouvelle.avertissements[0].demandeId, autre.id);
+});
+
+test('seul l\'auteur modifie, et le collaborateur ne peut pas être changé', options, async () => {
+  const parCarla = await demander('carla', { collaborateurId: ids.alice, dateDebut: '2027-08-23', dateFin: '2027-08-24' });
+  assert.equal((await modifier('chloe', parCarla.id, { dateDebut: '2027-08-25', dateFin: '2027-08-25' })).statusCode, 404);
+  assert.equal((await modifier('dan', parCarla.id, { dateDebut: '2027-08-25', dateFin: '2027-08-25' })).statusCode, 403); // valideur, pas auteur
+  // L'auteur de la saisie (carla) comme le collaborateur (alice) peuvent la modifier ; le collaborateur reste alice.
+  const parAlice = await modifier('alice', parCarla.id, { dateDebut: '2027-08-25', dateFin: '2027-08-25', collaborateurId: ids.chloe });
+  assert.equal(parAlice.statusCode, 201);
+  assert.equal(parAlice.json().collaborateur.id, ids.alice);
+  assert.equal(parAlice.json().saisiePar.id, ids.alice);
+  const parCarla2 = await modifier('carla', parAlice.json().id, { dateDebut: '2027-08-26', dateFin: '2027-08-26' });
+  assert.equal(parCarla2.statusCode, 403); // saisie par alice : carla n'en est plus l'auteur
+  const encore = await demander('carla', { collaborateurId: ids.alice, dateDebut: '2027-08-30', dateFin: '2027-08-30' });
+  assert.equal((await modifier('carla', encore.id, { dateDebut: '2027-08-31', dateFin: '2027-08-31' })).json().saisiePar.id, ids.carla);
+});
+
+test('on ne modifie que les demandes d\'absence en attente', options, async () => {
+  const corps = { dateDebut: '2027-09-06', dateFin: '2027-09-06' };
+  const approuvee = await demander('alice', { dateDebut: '2027-09-07', dateFin: '2027-09-07' });
+  await decider('carla', approuvee.id, 'approbation');
+  const refusee = await demander('alice', { dateDebut: '2027-09-08', dateFin: '2027-09-08' });
+  await decider('carla', refusee.id, 'refus', 'Non');
+  const retiree = await demander('alice', { dateDebut: '2027-09-09', dateFin: '2027-09-09' });
+  await appel('alice', 'POST', `/api/demandes/${retiree.id}/retrait`);
+  const declaration = await demander('alice', { typeId: ids.maladie, dateDebut: '2027-09-10', dateFin: '2027-09-10' });
+  const annulation = (await appel('alice', 'POST', `/api/demandes/${approuvee.id}/annulation`, {})).json();
+  for (const demande of [approuvee, refusee, retiree, declaration, annulation]) {
+    const reponse = await modifier('alice', demande.id, corps);
+    assert.equal(reponse.statusCode, 409, `demande ${demande.id}`);
+  }
+  assert.equal((await modifier('alice', 99999, corps)).statusCode, 404);
+  assert.equal((await modifier('inconnu', approuvee.id, corps)).statusCode, 401);
+});
+
+test('deux modifications simultanées : une seule passe, et l\'autre ne laisse rien', options, async () => {
+  const ancienne = await demander('alice', { dateDebut: '2027-09-13', dateFin: '2027-09-14' });
+  const reponses = await Promise.all([
+    modifier('alice', ancienne.id, { dateDebut: '2027-09-15', dateFin: '2027-09-15' }),
+    modifier('alice', ancienne.id, { dateDebut: '2027-09-16', dateFin: '2027-09-16' }),
+  ]);
+  assert.deepEqual(reponses.map((r) => r.statusCode).sort(), [201, 409]);
+  const { rows } = await pool.query('SELECT count(*)::int AS n FROM demandes WHERE remplace_id = $1', [ancienne.id]);
+  assert.equal(rows[0].n, 1);
+});
+
 // --- Retrait -----------------------------------------------------------------
 
 test('retrait : par l\'auteur, tant que la demande est en attente', options, async () => {

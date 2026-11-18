@@ -23,6 +23,7 @@ export function contenuRecapitulatif(recap, parametres, { fuseau = 'Europe/Paris
     ['Durée', `${formatDuree(d.dureeDemiJournees)} ouvré${d.dureeDemiJournees >= 4 ? 's' : ''}`],
   ];
   if (annulation) demande.push(['Concerne', `Demande d'absence n° ${d.demandeAnnuleeId}`]);
+  if (d.remplaceId) demande.push(['Remplace', `Demande n° ${d.remplaceId}, retirée par son auteur`]);
   if (d.commentaire) demande.push(['Commentaire', d.commentaire]);
   if (d.saisiePar.id !== d.collaborateur.id) demande.push(['Saisie par', nomComplet(d.saisiePar)]);
   demande.push(['Soumise le', formatDateHeure(d.soumiseLe, fuseau)]);

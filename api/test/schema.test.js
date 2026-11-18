@@ -159,6 +159,33 @@ test('une annulation doit viser une absence du même collaborateur et du même t
   await refuse(creerDemande(api, { type: ids.conges, evenement: 'soumission', nature: 'annulation' }), /check constraint/);
 });
 
+test('une demande peut en remplacer une autre du même collaborateur, et seulement celle-là', options, async () => {
+  const inserer = (extra = {}, db = api) => db.query(
+    `INSERT INTO demandes (nature, demande_annulee_id, remplace_id, collaborateur_id, equipe_id, type_id, date_debut, date_fin, duree_demi_journees, saisie_par_id)
+     VALUES ($1, $2, $3, $4, $5, $6, '2030-05-06', '2030-05-07', 4, $4) RETURNING id`,
+    [extra.nature ?? 'absence', extra.annule ?? null, extra.remplace ?? null, extra.collaborateur ?? ids.alice, ids.dev, ids.conges],
+  );
+  const premiere = await creerDemande(api, { type: ids.conges, evenement: 'soumission' });
+  const remplacante = await (async () => {
+    const client = await api.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await inserer({ remplace: premiere }, client);
+      await client.query(`INSERT INTO evenements_demande (demande_id, type, auteur_id) VALUES ($1, 'soumission', $2)`, [rows[0].id, ids.alice]);
+      await client.query('COMMIT');
+      return rows[0].id;
+    } finally {
+      client.release();
+    }
+  })();
+  assert.equal((await api.query('SELECT remplace_id FROM demandes_avec_statut WHERE id = $1', [remplacante])).rows[0].remplace_id, String(premiere));
+  // Pas une autre personne, pas une demande inexistante, pas une demande d'annulation, pas elle-même.
+  await refuse(inserer({ remplace: premiere, collaborateur: ids.bob }), /ne peut en remplacer qu'une autre, du même collaborateur/);
+  await refuse(inserer({ remplace: 999999 }), /ne peut en remplacer qu'une autre/);
+  await refuse(inserer({ nature: 'annulation', annule: premiere, remplace: premiere }), /ne peut en remplacer qu'une autre/);
+  await refuse(api.query(`UPDATE demandes SET remplace_id = NULL WHERE id = $1`, [remplacante]), /permission denied/);
+});
+
 test('les dates incohérentes sont refusées', options, async () => {
   await refuse(
     creerDemande(api, { type: ids.conges, evenement: 'soumission', debut: '2030-03-08', fin: '2030-03-04' }),

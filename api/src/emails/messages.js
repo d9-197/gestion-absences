@@ -34,6 +34,7 @@ export function textePour(modele, recap, { appUrl, fuseau, avecPdf, raisonSocial
     if (d.avertissements.length) {
       lignes.push('', "Avertissements affichés à la saisie :", ...d.avertissements.map((a) => `  - ${a.message}`));
     }
+    if (d.remplaceId) lignes.push('', `Cette demande remplace la demande n° ${d.remplaceId}, retirée par son auteur.`);
     lignes.push('', `Pour la traiter : ${appUrl}/a-traiter`);
   } else {
     const quand = formatDateHeure(ev.le, fuseau);

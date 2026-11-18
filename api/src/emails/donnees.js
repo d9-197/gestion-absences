@@ -7,7 +7,7 @@ export async function chargerRecapitulatif(db, evenementId) {
   const { rows } = await db.query(
     `SELECT ev.id AS evenement_id, ev.type AS evenement_type, ev.motif, ev.cree_le AS evenement_le,
             au.id AS auteur_id, au.prenom AS auteur_prenom, au.nom AS auteur_nom,
-            d.id, d.nature, d.demande_annulee_id, d.date_debut, d.debut_demi_journee, d.date_fin, d.fin_demi_journee,
+            d.id, d.nature, d.demande_annulee_id, d.remplace_id, d.date_debut, d.debut_demi_journee, d.date_fin, d.fin_demi_journee,
             d.duree_demi_journees, d.commentaire, d.avertissements, d.soumise_le,
             c.id AS collaborateur_id, c.prenom AS collaborateur_prenom, c.nom AS collaborateur_nom,
             e.nom AS equipe_nom, t.libelle AS type_libelle,
@@ -33,6 +33,7 @@ export async function chargerRecapitulatif(db, evenementId) {
       id: Number(r.id),
       nature: r.nature,
       demandeAnnuleeId: r.demande_annulee_id === null ? null : Number(r.demande_annulee_id),
+      remplaceId: r.remplace_id === null ? null : Number(r.remplace_id),
       dateDebut: r.date_debut, debutDemiJournee: r.debut_demi_journee,
       dateFin: r.date_fin, finDemiJournee: r.fin_demi_journee,
       dureeDemiJournees: r.duree_demi_journees,

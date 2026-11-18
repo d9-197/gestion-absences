@@ -23,7 +23,8 @@ export function creerSessions({ pool, config }) {
       const jeton = requete.cookies[COOKIE_SESSION];
       if (!jeton) return null;
       const { rows } = await pool.query(
-        `SELECT c.id, c.email, c.nom, c.prenom, c.role, c.equipe_id, e.nom AS equipe_nom
+        `SELECT c.id, c.email, c.nom, c.prenom, c.role, c.equipe_id, e.nom AS equipe_nom,
+                c.mot_de_passe_hash IS NOT NULL AS a_mot_de_passe
          FROM sessions s
          JOIN collaborateurs c ON c.id = s.collaborateur_id
          JOIN equipes e ON e.id = c.equipe_id

@@ -14,7 +14,7 @@ const frDate = (iso) => iso.split('-').reverse().join('/');
 
 // Colonnes lues pour décrire une demande, avec ce qui permet de calculer les actions possibles pour $1.
 export const SELECTION_DEMANDE = `
-  SELECT d.id, d.nature, d.demande_annulee_id,
+  SELECT d.id, d.nature, d.demande_annulee_id, d.remplace_id,
          d.collaborateur_id, c.prenom AS collaborateur_prenom, c.nom AS collaborateur_nom,
          d.equipe_id, e.nom AS equipe_nom,
          d.type_id, t.libelle AS type_libelle,
@@ -44,6 +44,7 @@ export function demandeVersJson(d, moi) {
     id: Number(d.id),
     nature: d.nature,
     demandeAnnuleeId: d.demande_annulee_id === null ? null : Number(d.demande_annulee_id),
+    remplaceId: d.remplace_id === null ? null : Number(d.remplace_id),
     collaborateur: personne(d.collaborateur_id, d.collaborateur_prenom, d.collaborateur_nom),
     equipe: { id: Number(d.equipe_id), nom: d.equipe_nom },
     type: { id: Number(d.type_id), libelle: d.type_libelle },
@@ -115,7 +116,7 @@ async function verifierFenetre(db, { dateDebut, dateFin }, aujourdhui) {
   }
 }
 
-async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDemiJournee, dateFin, finDemiJournee, duree, soi }, aujourdhui) {
+async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDemiJournee, dateFin, finDemiJournee, duree, soi, ignorer }, aujourdhui) {
   const avertissements = [];
 
   const { rows } = await db.query(
@@ -123,8 +124,9 @@ async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDem
      WHERE collaborateur_id = $1 AND nature = 'absence' AND statut = ANY($2)
        AND (date_debut - DATE '2000-01-01') * 2 + (debut_demi_journee = 'apres_midi')::int <= $4
        AND (date_fin - DATE '2000-01-01') * 2 + (fin_demi_journee = 'apres_midi')::int >= $3
+       AND ($5::bigint IS NULL OR id <> $5)
      ORDER BY date_debut, (debut_demi_journee = 'apres_midi')::int, id`,
-    [collaborateurId, STATUTS_ACTIFS, numeroDemiJournee(dateDebut, debutDemiJournee), numeroDemiJournee(dateFin, finDemiJournee)],
+    [collaborateurId, STATUTS_ACTIFS, numeroDemiJournee(dateDebut, debutDemiJournee), numeroDemiJournee(dateFin, finDemiJournee), ignorer ?? null],
   );
   for (const autre of rows) {
     avertissements.push({
@@ -156,7 +158,7 @@ async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDem
 }
 
 // Prépare une demande sans l'enregistrer : durée, avertissements, circuit. Sert à la prévisualisation et à la soumission.
-export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pourAnnulation = false }) {
+export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pourAnnulation = false, ignorer = null }) {
   const moi = Number(utilisateur.id);
   const collaborateurId = corps.collaborateurId ?? moi;
   const periode = {
@@ -191,7 +193,7 @@ export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pour
   });
   const duree = calculerDuree({ ...periode, nonTravailles });
   const avertissements = await avertissementsDe(
-    db, { collaborateurId, type, ...periode, duree, soi: collaborateurId === moi }, aujourdhui,
+    db, { collaborateurId, type, ...periode, duree, soi: collaborateurId === moi, ignorer }, aujourdhui,
   );
 
   // Une demande qui ne pourrait être traitée par personne resterait bloquée : on la refuse dès la saisie.
@@ -200,24 +202,32 @@ export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pour
     ? "Personne d'autre ne peut valider cette demande : désignez un responsable ou un autre directeur"
     : null;
 
+  // Les personnes prévenues par e-mail : le niveau de validation le plus proche, à défaut les directeurs.
+  const proches = await db.query(
+    'SELECT c.prenom, c.nom FROM collaborateurs c WHERE c.id IN (SELECT valideurs_proches_de($1))', [collaborateurId]);
+  const ordre = new Intl.Collator('fr', { sensitivity: 'base' });
+  const valideursProches = proches.rows
+    .map((v) => ({ prenom: v.prenom, nom: v.nom }))
+    .sort((a, b) => ordre.compare(a.nom, b.nom) || ordre.compare(a.prenom, b.prenom));
+
   return {
     collaborateur: { id: Number(collaborateurId), equipeId: Number(collaborateur.equipe_id) },
     type: { id: Number(type.id), libelle: type.libelle, approbationRequise: type.approbation_requise },
-    periode, duree, avertissements, nbValideurs, blocage,
+    periode, duree, avertissements, nbValideurs, valideursProches, blocage,
   };
 }
 
 // Enregistre une demande d'absence ou d'annulation et son premier événement, dans une même transaction.
-export async function enregistrerDemande(client, { prepare, auteurId, commentaire, nature = 'absence', demandeAnnuleeId = null }) {
+export async function enregistrerDemande(client, { prepare, auteurId, commentaire, nature = 'absence', demandeAnnuleeId = null, remplaceId = null }) {
   const { collaborateur, type, periode, duree, avertissements } = prepare;
   const { rows } = await client.query(
     `INSERT INTO demandes (nature, demande_annulee_id, collaborateur_id, equipe_id, type_id,
                            date_debut, debut_demi_journee, date_fin, fin_demi_journee,
-                           duree_demi_journees, commentaire, avertissements, saisie_par_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+                           duree_demi_journees, commentaire, avertissements, saisie_par_id, remplace_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [nature, demandeAnnuleeId, collaborateur.id, collaborateur.equipeId, type.id,
       periode.dateDebut, periode.debutDemiJournee, periode.dateFin, periode.finDemiJournee,
-      duree, commentaire?.trim() || null, JSON.stringify(avertissements), auteurId],
+      duree, commentaire?.trim() || null, JSON.stringify(avertissements), auteurId, remplaceId],
   );
   const evenement = await client.query(
     'INSERT INTO evenements_demande (demande_id, type, auteur_id) VALUES ($1, $2, $3) RETURNING id',

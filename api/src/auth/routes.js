@@ -1,4 +1,5 @@
 import { creerLienMotDePasse, empreinte } from './jetons.js';
+import { COOKIE_SESSION } from './sessions.js';
 import { hacher, verifier, LONGUEUR_MINIMALE } from './mots-de-passe.js';
 
 const COOKIE_OIDC = 'absences_oidc';
@@ -11,6 +12,8 @@ const profil = (u) => ({
   prenom: u.prenom,
   role: u.role,
   equipe: { id: Number(u.equipe_id), nom: u.equipe_nom },
+  // Un compte qui se connecte uniquement avec Microsoft n'a pas de mot de passe à changer.
+  aMotDePasse: u.a_mot_de_passe,
 });
 
 export async function routesAuth(app, { pool, config, sessions, courriel, microsoft, limites, autologin = false }) {
@@ -170,6 +173,66 @@ export async function routesAuth(app, { pool, config, sessions, courriel, micros
     } finally {
       client.release();
     }
+  });
+
+  // Changer son propre mot de passe : exige l'actuel, ferme les autres sessions et annule les liens en cours.
+  // Les refus sont des 400 et non des 401 : le client réserve le 401 à « session expirée ».
+  app.post('/api/auth/mot-de-passe/changer', {
+    onRequest: app.authentifier,
+    config: { rateLimit: limites.connexion },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['motDePasseActuel', 'nouveauMotDePasse'],
+        properties: {
+          motDePasseActuel: { type: 'string', minLength: 1, maxLength: 1024 },
+          nouveauMotDePasse: { type: 'string', minLength: LONGUEUR_MINIMALE, maxLength: 1024 },
+        },
+      },
+    },
+  }, async (requete, reponse) => {
+    const { motDePasseActuel, nouveauMotDePasse } = requete.body;
+    const { rows } = await pool.query('SELECT mot_de_passe_hash FROM collaborateurs WHERE id = $1', [requete.utilisateur.id]);
+    const stocke = rows[0]?.mot_de_passe_hash;
+    if (!stocke) {
+      return reponse.code(400).send({ erreur: "Ce compte n'a pas de mot de passe : utilisez « Mot de passe oublié » pour en définir un" });
+    }
+    if (!(await verifier(motDePasseActuel, stocke))) return reponse.code(400).send({ erreur: 'Mot de passe actuel incorrect' });
+    if (motDePasseActuel === nouveauMotDePasse) {
+      return reponse.code(400).send({ erreur: "Le nouveau mot de passe doit être différent de l'actuel" });
+    }
+    const hachage = await hacher(nouveauMotDePasse);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('UPDATE collaborateurs SET mot_de_passe_hash = $1 WHERE id = $2', [hachage, requete.utilisateur.id]);
+      await client.query('DELETE FROM sessions WHERE collaborateur_id = $1 AND jeton_hash <> $2',
+        [requete.utilisateur.id, empreinte(requete.cookies[COOKIE_SESSION])]);
+      await client.query('UPDATE jetons_mot_de_passe SET utilise_le = now() WHERE collaborateur_id = $1 AND utilise_le IS NULL',
+        [requete.utilisateur.id]);
+      await client.query('COMMIT');
+    } catch (erreur) {
+      await client.query('ROLLBACK');
+      throw erreur;
+    } finally {
+      client.release();
+    }
+    // Prévenir la personne : un changement qu'elle n'a pas fait doit se voir.
+    try {
+      await courriel.envoyer({
+        a: requete.utilisateur.email,
+        sujet: 'Gestion des absences : votre mot de passe a été modifié',
+        texte: [
+          `Bonjour ${requete.utilisateur.prenom},`,
+          '',
+          "Le mot de passe de votre compte vient d'être modifié, et vos autres sessions ont été fermées.",
+          "Si ce n'est pas vous, contactez un directeur sans attendre.",
+        ].join('\n'),
+      });
+    } catch (erreur) {
+      requete.log.error(erreur, "envoi de l'e-mail de changement de mot de passe impossible");
+    }
+    return reponse.code(204).send();
   });
 
   // --- Connexion Microsoft -------------------------------------------------
