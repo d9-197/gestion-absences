@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { appeler } from '../api.js';
 import { useATraiter, useDonnees } from '../donnees.js';
 import { aujourdhui, estWeekEnd, initialeJour, joursDuMois, libelleMois, moisCourant, moisSuivant, numeroDemiJournee } from '../dates.js';
 import { formatPeriode, jourCourt, nomComplet } from '../format.js';
@@ -56,6 +57,7 @@ export default function Planning() {
   const [info, setInfo] = useState('');
   const [suiviOuvert, setSuiviOuvert] = useState(null); // { personneId, jour } : détail tickets et télétravail
   const [serie, setSerie] = useState(false);
+  const [erreurSuivi, setErreurSuivi] = useState('');
   // Les indications de ticket et de télétravail sous chaque ligne se masquent, pour alléger une grille chargée.
   const [afficherSuivi, setAfficherSuivi] = useState(() => lireReglages(utilisateur.id).suivi ?? true);
 
@@ -67,6 +69,8 @@ export default function Planning() {
   const defilement = useRef(null);
   const indice = useRef(null);
   const glisse = useRef(null); // balayage en cours : { ligne, personne, depart, courant } (numéros de demi-journée du mois)
+  const peinture = useRef(null); // coches en cours de balayage : { objet, personne, cible, ligne, jours: Map jour -> bouton }
+  const finPeinture = useRef(0);
   const finGlisse = useRef(0); // instant du dernier balayage, pour ignorer le clic qui le suit
   const donnees = planning.donnees?.debut === debut ? planning.donnees : null; // pas de données d'un autre mois
 
@@ -127,6 +131,46 @@ export default function Planning() {
     indice.current.textContent = `Poser une absence${pour} à partir de ${jourCourt(cellule.dataset.jour)}, ${cellule.dataset.moitie === '1' ? 'après-midi' : 'matin'}`;
   };
 
+
+  // Coche ou décoche TT ou TR pour des jours d'une personne ; l'API juge de ce qui est permis.
+  async function basculerSuivi(objet, personneId, joursVises, cible) {
+    setErreurSuivi('');
+    try {
+      if (objet === 'tt') await appeler('/suivi/teletravail', { methode: 'PUT', corps: { collaborateurId: personneId, jours: joursVises, teletravail: cible } });
+      else await appeler('/suivi/tickets', { methode: 'PUT', corps: { collaborateurId: personneId, jours: joursVises, retire: !cible } });
+    } catch (e) {
+      setErreurSuivi(e.message);
+    }
+    planning.recharger();
+  }
+  // Glisser la souris sur une ligne TT ou TR coche (ou décoche) toute la plage d'un coup ; un simple clic bascule un jour.
+  const commencerPeinture = (evenement) => {
+    if (evenement.button !== 0 || evenement.pointerType !== 'mouse') return;
+    const bouton = evenement.target.closest?.('button.case-suivi');
+    if (!bouton) return;
+    peinture.current = {
+      objet: bouton.dataset.objet, personne: Number(bouton.dataset.personne), cible: bouton.getAttribute('aria-checked') !== 'true',
+      ligne: bouton.closest('tr'), jours: new Map([[bouton.dataset.jour, bouton]]),
+    };
+    window.addEventListener('pointerup', finirPeinture, { once: true });
+  };
+  const peindre = (evenement) => {
+    const p = peinture.current;
+    const bouton = evenement.target.closest?.('button.case-suivi');
+    if (!p || !bouton || bouton.closest('tr') !== p.ligne) return;
+    p.jours.set(bouton.dataset.jour, bouton);
+    for (const b of p.jours.values()) b.classList.add('peinte');
+  };
+  const finirPeinture = () => {
+    const p = peinture.current;
+    peinture.current = null;
+    if (!p) return;
+    for (const b of p.jours.values()) b.classList.remove('peinte');
+    if (p.jours.size < 2) return; // un simple clic : traité par le bouton
+    finPeinture.current = Date.now();
+    basculerSuivi(p.objet, p.personne, [...p.jours.keys()].sort(), p.cible);
+  };
+
   // Glisser sur une ligne choisit le début ET la fin : de la demi-journée d'appui à celle où l'on relâche.
   // Réservé à la souris : au doigt, glisser fait défiler la grille, et un appui suffit à ouvrir le formulaire.
   const periodeDe = (a, b) => {
@@ -180,34 +224,49 @@ export default function Planning() {
     const imposes = new Map((donnees.imposesParEquipe[personne.equipeId] ?? []).map((j) => [j.jour, j.libelle]));
     const libre = personne.actif; // on ne pose pas d'absence pour une personne désactivée
     const classesLigne = [estMoi && 'ligne-moi', !personne.actif && 'inactif'].filter(Boolean).join(' ');
-    const sousLigne = afficherSuivi && (
-      <tr key={`suivi-${personne.id}`} className={`ligne-suivi${estMoi ? ' ligne-moi' : ''}${!personne.actif ? ' inactif' : ''}`}>
-        <th scope="row" className="nom nom-suivi"><span className="visuellement-cache">{nomComplet(personne)} : </span>Ticket · télétravail</th>
-        {jours.map((jour) => {
-          const ticket = personne.suivi.tickets.includes(jour) ? 'oui' : personne.suivi.ticketsRetires.some((t) => t.jour === jour) ? 'retire' : null;
-          const tele = personne.suivi.teletravail.includes(jour);
-          const texte = [ticket === 'oui' ? 'ticket restaurant dû' : ticket === 'retire' ? 'ticket retiré' : null, tele ? 'télétravail' : null].filter(Boolean).join(', ');
-          const contenu = (
-            <>
-              {ticket === 'oui' && <span className="tk" aria-hidden="true">●</span>}
-              {ticket === 'retire' && <span className="tk tk-retire" aria-hidden="true">⊘</span>}
-              {tele && <span className="tt" aria-hidden="true">T</span>}
-            </>
-          );
-          const modifiable = jourModifiable(personne.suivi.modifiable, jour);
+    // Deux lignes sous chaque personne, une case par jour : TT (télétravail déclaré) et TR (ticket restaurant dû).
+    // Un TR décoché est un ticket retiré. Une case n'existe que si elle a un sens ce jour-là.
+    const casesSuivi = (objet) => (
+      <tr key={`${objet}-${personne.id}`} className={`ligne-suivi ligne-${objet}${estMoi ? ' ligne-moi' : ''}${!personne.actif ? ' inactif' : ''}`}>
+        <th scope="row" className="nom nom-suivi">
+          <span className="visuellement-cache">{nomComplet(personne)} : </span>
+          <abbr title={objet === 'tt' ? 'Télétravail' : 'Ticket restaurant'}>{objet.toUpperCase()}</abbr>
+          {objet === 'tr' && (
+            <button type="button" className="bouton lien suivi-detail" onClick={() => setSuiviOuvert({ personneId: personne.id, jour: null })}
+              aria-label={`Détail du mois de ${nomComplet(personne)} : TT et TR`}>Mois</button>
+          )}
+        </th>
+        {jours.map((jour, i) => {
+          const travaille = !estWeekEnd(jour) && !ferie.has(jour) && !imposes.has(jour);
+          const absentTout = creneaux[i * 2] && creneaux[i * 2 + 1];
+          const retire = personne.suivi.ticketsRetires.some((t) => t.jour === jour);
+          const coche = objet === 'tt' ? personne.suivi.teletravail.includes(jour) : personne.suivi.tickets.includes(jour);
+          const possible = objet === 'tt' ? travaille && !absentTout : coche || retire;
+          const nomObjet = objet === 'tt' ? 'télétravail' : 'ticket restaurant';
+          const description = `${nomComplet(personne)}, ${jourCourt(jour)} : ${nomObjet} ${coche ? 'coché' : 'non coché'}`;
+          const classes = `suivi-jour${estWeekEnd(jour) ? ' we' : ''}${ferie.has(jour) ? ' ferie' : ''}${imposes.has(jour) ? ' impose' : ''}${jour === aujourdhuiIso ? ' aujourdhui' : ''}`;
+          if (!possible) return <td key={jour} colSpan={2} className={classes} />;
+          if (!jourModifiable(personne.suivi.modifiable, jour)) {
+            return (
+              <td key={jour} colSpan={2} className={classes}>
+                <span className={`case-suivi${coche ? ' cochee' : ''}`} role="img" aria-label={description}>{coche ? '✓' : ''}</span>
+              </td>
+            );
+          }
           return (
-            <td key={jour} colSpan={2} className={`suivi-jour${estWeekEnd(jour) ? ' we' : ''}${ferie.has(jour) ? ' ferie' : ''}${imposes.has(jour) ? ' impose' : ''}${jour === aujourdhuiIso ? ' aujourdhui' : ''}`}>
-              {modifiable ? (
-                <button type="button" className="suivi-bouton" title={texte || 'Pas de ticket ce jour'} aria-label={`${nomComplet(personne)}, ${jourCourt(jour)} : ${texte || 'pas de ticket'}. Modifier`}
-                  onClick={() => setSuiviOuvert({ personneId: personne.id, jour })}>{contenu}</button>
-              ) : (
-                <span className="suivi-bouton" title={texte || undefined} role={texte ? 'img' : undefined} aria-label={texte ? `${nomComplet(personne)}, ${jourCourt(jour)} : ${texte}` : undefined}>{contenu}</span>
-              )}
+            <td key={jour} colSpan={2} className={classes}>
+              <button type="button" role="checkbox" aria-checked={coche} className={`case-suivi${coche ? ' cochee' : ''}`}
+                aria-label={description} title={`${jourCourt(jour)} : ${nomObjet}`}
+                data-objet={objet} data-personne={personne.id} data-jour={jour}
+                onClick={() => { if (Date.now() - finPeinture.current > 500) basculerSuivi(objet, personne.id, [jour], !coche); }}>
+                {coche ? '✓' : ''}
+              </button>
             </td>
           );
         })}
       </tr>
     );
+    const sousLignes = afficherSuivi ? [casesSuivi('tt'), casesSuivi('tr')] : [];
     return [(
       <tr key={personne.id} className={classesLigne || undefined}>
         <th scope="row" className="nom" title={nomComplet(personne)}>
@@ -241,13 +300,13 @@ export default function Planning() {
           );
         }))}
       </tr>
-    ), sousLigne];
+    ), ...sousLignes];
   };
 
   const grille = donnees && (
     <div className="planning-defilant" ref={defilement}>
       <table className="planning" onClick={poser} onMouseOver={survoler} onMouseLeave={survoler}
-        onPointerDown={commencerBalayage} onPointerOver={balayer}>
+        onPointerDown={(e) => { commencerBalayage(e); commencerPeinture(e); }} onPointerOver={(e) => { balayer(e); peindre(e); }}>
         <caption className="visuellement-cache">{`${titre}, ${libelleMois(mois)}`}</caption>
         <thead>
           <tr>
@@ -311,10 +370,10 @@ export default function Planning() {
   // Tickets restaurant et télétravail du mois, par personne, avec le détail jour par jour.
   const listeSuivi = donnees && (
     <section aria-labelledby="titre-suivi" className="section-suivante">
-      <h2 id="titre-suivi">Tickets restaurant et télétravail</h2>
+      <h2 id="titre-suivi">Tickets restaurant (TR) et télétravail (TT)</h2>
       <div className="tableau-defilant">
         <table>
-          <thead><tr><th>Collaborateur</th><th className="nombre">Tickets dus</th><th className="nombre">Tickets retirés</th><th className="nombre">Jours de télétravail</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Collaborateur</th><th className="nombre">TR dus</th><th className="nombre">TR retirés</th><th className="nombre">Jours de TT</th><th>Actions</th></tr></thead>
           <tbody>
             {toutes.map(({ personne }) => (
               <tr key={personne.id}>
@@ -368,11 +427,11 @@ export default function Planning() {
             </select>
           </div>
         )}
-        <button className="bouton secondaire compact" type="button" onClick={() => { setInfo(''); setSerie(true); }}>Télétravail en série</button>
+        <button className="bouton secondaire compact" type="button" onClick={() => { setInfo(''); setSerie(true); }}>TT en série</button>
         {vue === 'calendrier' && (
           <label className="case case-barre">
             <input type="checkbox" checked={afficherSuivi} onChange={(e) => choisirSuivi(e.target.checked)} />
-            Tickets et télétravail
+            TT et TR
           </label>
         )}
         <button className="bouton secondaire compact" type="button" onClick={() => window.print()}>Imprimer</button>
@@ -385,6 +444,7 @@ export default function Planning() {
       </div>
 
       {info && <p className="message succes" role="status">{info}</p>}
+      {erreurSuivi && <p className="message erreur" role="alert">{erreurSuivi}</p>}
       {!donnees ? (
         <p className={planning.erreur ? 'message erreur' : 'chargement'}>{planning.erreur || 'Chargement…'}</p>
       ) : (
@@ -401,9 +461,8 @@ export default function Planning() {
             <li><span className="echantillon cellule impose" aria-hidden="true" /> Jour non travaillé imposé</li>
             {vue === 'calendrier' && afficherSuivi && (
               <>
-                <li><span className="tk" aria-hidden="true">●</span> Ticket restaurant dû</li>
-                <li><span className="tk tk-retire" aria-hidden="true">⊘</span> Ticket retiré</li>
-                <li><span className="tt" aria-hidden="true">T</span> Télétravail</li>
+                <li><span className="case-suivi cochee" aria-hidden="true">✓</span> <strong>TT</strong> télétravail déclaré</li>
+                <li><span className="case-suivi cochee" aria-hidden="true">✓</span> <strong>TR</strong> ticket restaurant dû (décoché : retiré)</li>
               </>
             )}
           </ul>

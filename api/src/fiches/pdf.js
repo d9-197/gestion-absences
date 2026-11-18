@@ -85,8 +85,8 @@ function dessinerFiche(doc, fiche, { raisonSociale, editeePar, fuseau, maintenan
       doc.font('Helvetica-Bold').fontSize(9).fillColor(j.matin && j.apresMidi && j.matin.statut !== 'en_attente' ? '#ffffff' : NOIR)
         .text(String(Number(jour.slice(8))), x + 3, y + 3, { lineBreak: false });
       if (j.teletravail) {
-        doc.rect(x + 3, y + ch - 14, 11, 11).lineWidth(0.8).strokeColor(NOIR).fillAndStroke('#ffffff', NOIR);
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(NOIR).text('T', x + 3, y + ch - 12, { width: 11, align: 'center', lineBreak: false });
+        doc.rect(x + 3, y + ch - 14, 16, 11).lineWidth(0.8).strokeColor(NOIR).fillAndStroke('#ffffff', NOIR);
+        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(NOIR).text('TT', x + 3, y + ch - 12, { width: 16, align: 'center', lineBreak: false });
       }
       if (j.ticket) {
         const texteX = x + cw - 17;
@@ -118,10 +118,10 @@ function dessinerFiche(doc, fiche, { raisonSociale, editeePar, fuseau, maintenan
   const fin1 = colonne('Jours et tickets', [
     ['Jours ouvrés du mois', nombre(c.joursOuvres)],
     ['Jours travaillés', nombre(c.joursTravailles), true],
-    ['dont en télétravail', nombre(c.teletravail)],
+    ['dont en télétravail (TT)', nombre(c.teletravail)],
     ['dont sur site', nombre(c.surSite)],
-    ['Tickets restaurant', c.tickets, true],
-    ['Tickets retirés par le salarié', c.ticketsRetires],
+    ['Tickets restaurant (TR)', c.tickets, true],
+    ['TR retirés par le salarié', c.ticketsRetires],
   ], gauche, demiLargeur);
   const fin2 = colonne('Absences (jours, confirmées)', [
     ...c.absences.map((a) => [`${a.libelle} (${codes.get(a.typeId)})`, nombre(a.jours)]),
@@ -131,7 +131,7 @@ function dessinerFiche(doc, fiche, { raisonSociale, editeePar, fuseau, maintenan
 
   // --- Légende et notes
   doc.font('Helvetica').fontSize(8).fillColor(GRIS).text(
-    'Calendrier : moitié gauche de la case = matin, moitié droite = après-midi. T = télétravail déclaré. TR = ticket restaurant dû '
+    'Calendrier : moitié gauche de la case = matin, moitié droite = après-midi. TT = télétravail déclaré. TR = ticket restaurant dû '
     + '(barré : retiré par le salarié). Fond jaune = jour férié, violet = jour imposé, gris = week-end. Case hachurée = demande en attente.',
     gauche, y, { width: largeur });
   y = doc.y + 4;
