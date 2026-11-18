@@ -11,6 +11,7 @@ import DefinirMotDePasse from './pages/DefinirMotDePasse.jsx';
 import Collaborateurs from './pages/admin/Collaborateurs.jsx';
 import Equipes from './pages/admin/Equipes.jsx';
 import TypesAbsence from './pages/admin/TypesAbsence.jsx';
+import Compteurs from './pages/admin/Compteurs.jsx';
 import Calendrier from './pages/admin/Calendrier.jsx';
 import Emails from './pages/admin/Emails.jsx';
 import FichesRh from './pages/FichesRh.jsx';
@@ -53,6 +54,7 @@ function Pages() {
       <Route path="/admin/emails" element={<Protegee role="directeur"><Emails /></Protegee>} />
       <Route path="/admin/journal" element={<Protegee role="directeur"><Journal /></Protegee>} />
       <Route path="/admin/conservation" element={<Protegee role="directeur"><Conservation /></Protegee>} />
+      <Route path="/admin/compteurs" element={<Protegee role="directeur"><Compteurs /></Protegee>} />
       <Route path="/admin/types-absence" element={<Protegee role="directeur"><TypesAbsence /></Protegee>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

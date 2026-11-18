@@ -285,6 +285,7 @@ test('types d\'absence : liste de départ, création et modification', options, 
   assert.deepEqual(formation, {
     id: formation.id, libelle: 'Formation', approbationRequise: true, confidentiel: false,
     delaiPrevenanceJours: 15, actif: true, ordre: 70, utilise: false,
+    compteurActif: false, dotationAnnuelle: null, debutPeriodeMois: 1, reportAutomatique: true,
   });
   ids.formation = formation.id;
 

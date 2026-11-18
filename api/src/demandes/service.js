@@ -1,4 +1,5 @@
 import { ErreurMetier, introuvable } from '../erreurs.js';
+import { avertissementSolde } from '../compteurs/service.js';
 import { ajouterMois, calculerDuree, nombreDeJours, numeroDemiJournee } from '../calendrier/dates.js';
 import { joursNonTravailles } from '../calendrier/service.js';
 import { enfiler } from '../emails/file.js';
@@ -116,7 +117,7 @@ async function verifierFenetre(db, { dateDebut, dateFin }, aujourdhui) {
   }
 }
 
-async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDemiJournee, dateFin, finDemiJournee, duree, soi, ignorer }, aujourdhui) {
+async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDemiJournee, dateFin, finDemiJournee, duree, soi, ignorer, pourAnnulation }, aujourdhui) {
   const avertissements = [];
 
   const { rows } = await db.query(
@@ -151,6 +152,9 @@ async function avertissementsDe(db, { collaborateurId, type, dateDebut, debutDem
     }
   }
 
+  const solde = pourAnnulation ? null : await avertissementSolde(db, { collaborateurId, type, dateDebut, duree, aujourdhui, ignorer });
+  if (solde) avertissements.push(solde);
+
   if (duree === 0) {
     avertissements.push({ code: 'duree_nulle', message: 'Cette période ne contient aucun jour ouvré' });
   }
@@ -177,7 +181,7 @@ export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pour
   }
 
   const types = await db.query(
-    'SELECT id, libelle, approbation_requise, delai_prevenance_jours, actif FROM types_absence WHERE id = $1',
+    'SELECT id, libelle, approbation_requise, delai_prevenance_jours, actif, compteur_actif FROM types_absence WHERE id = $1',
     [corps.typeId],
   );
   const type = types.rows[0];
@@ -193,7 +197,7 @@ export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pour
   });
   const duree = calculerDuree({ ...periode, nonTravailles });
   const avertissements = await avertissementsDe(
-    db, { collaborateurId, type, ...periode, duree, soi: collaborateurId === moi, ignorer }, aujourdhui,
+    db, { collaborateurId, type, ...periode, duree, soi: collaborateurId === moi, ignorer, pourAnnulation }, aujourdhui,
   );
 
   // Une demande qui ne pourrait être traitée par personne resterait bloquée : on la refuse dès la saisie.

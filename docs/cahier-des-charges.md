@@ -240,3 +240,13 @@ Les règles d'acquisition des compteurs (convention collective, accords d'entrep
 - Le collaborateur peut retirer le ticket d'un jour. Il déclare lui-même ses jours de télétravail, à l'unité ou en série ; sans validation par le responsable.
 - Modifiable par le collaborateur jusqu'à la fin du mois ; un directeur peut corriger après la fin du mois.
 - La fiche RH mensuelle (calendrier du mois et compteurs : jours travaillés, absences par type, tickets restaurant, télétravail) se génère en PDF, individuellement ou en masse pour les responsables et les directeurs.
+
+## Compteurs de congés (ajout du 18 novembre 2026)
+
+Compteurs **indicatifs** (les bulletins de paie font foi, mention affichée partout), activables par type d'absence et désactivables globalement.
+
+- Acquisition mensuelle (droit annuel ÷ 12, créditée le 1er de chaque mois) ; droit annuel par défaut par type, ajustable par salarié par un directeur ; période de référence réglable par type (début au 1er du mois choisi).
+- Le salarié peut recaler son solde (date + nombre de jours restants à poser) ; chaque recalage est conservé.
+- Report en fin de période : option par type, automatique (tout le reliquat, sans limite, si la période précédente a été recalée) ou saisi par un directeur.
+- Une demande qui dépasse le solde acquis à sa date de début produit un avertissement non bloquant ; les demandes en attente sont déduites du solde affiché et signalées.
+- **Non réalisé** : la déduction des jours imposés « avec décompte » (le type de compteur concerné n'est pas défini dans l'outil), le prorata d'acquisition à l'arrivée, le fractionnement.

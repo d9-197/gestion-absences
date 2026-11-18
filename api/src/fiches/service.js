@@ -1,6 +1,7 @@
 import { ErreurMetier, introuvable } from '../erreurs.js';
 import { ajouterJours, ajouterMois } from '../calendrier/dates.js';
 import { contexteJours } from '../suivi/service.js';
+import { compteursActifs, soldesDe } from '../compteurs/service.js';
 
 export const bornesDuMois = (mois) => {
   const debut = `${mois}-01`;
@@ -14,7 +15,7 @@ const demiJours = (n) => n / 2;
 // Les trois catégories de demi-journées ouvrées se partagent le mois sans se recouper :
 //   travaillées + absences confirmées (par type) + demandes en attente = jours ouvrés × 2.
 // Une demande en attente n'est donc ni comptée comme travaillée ni comme absence : la fiche est alors « provisoire ».
-export async function calculerFiche(db, { collaborateurId, mois }) {
+export async function calculerFiche(db, { collaborateurId, mois, aujourdhui = null }) {
   const [debut, fin] = bornesDuMois(mois);
   const contexte = await contexteJours(db, { collaborateurId, debut, fin });
   const [types, detail, equipe] = await Promise.all([
@@ -56,8 +57,12 @@ export async function calculerFiche(db, { collaborateurId, mois }) {
   });
 
   const travaillees = ouvrees - confirmees - enAttente;
+  // Soldes de congés indicatifs, à la date d'édition (ou de clôture) ; absents si les compteurs sont désactivés.
+  const soldes = aujourdhui && await compteursActifs(db) ? await soldesDe(db, { collaborateurId, aujourdhui }) : [];
   return {
     mois, debut, fin,
+    soldes: soldes.map((s) => ({ typeId: s.typeId, libelle: s.libelle, solde: s.solde, enAttente: s.enAttente })),
+    soldesAu: soldes.length ? aujourdhui : null,
     collaborateur: {
       id: Number(contexte.personne.id), prenom: contexte.personne.prenom, nom: contexte.personne.nom,
       email: detail.rows[0].email, equipe: equipe.rows[0].nom,
@@ -118,7 +123,7 @@ export async function etatCloture(db, mois) {
 }
 
 // La fiche à présenter : l'instantané pris à la clôture s'il existe pour ce salarié, sinon le calcul à la volée.
-export async function ficheDe(db, { collaborateurId, mois }) {
+export async function ficheDe(db, { collaborateurId, mois, aujourdhui }) {
   const { rows } = await db.query(
     `SELECT c.fiches, c.cree_le, a.prenom, a.nom
      FROM clotures_actuelles c JOIN collaborateurs a ON a.id = c.auteur_id WHERE c.mois = $1 AND c.action = 'cloture'`,
@@ -126,7 +131,7 @@ export async function ficheDe(db, { collaborateurId, mois }) {
   );
   const figee = rows[0]?.fiches?.find((f) => f.collaborateur.id === collaborateurId);
   if (figee) return { ...figee, figee: { le: rows[0].cree_le.toISOString(), par: `${rows[0].prenom} ${rows[0].nom}` } };
-  return { ...(await calculerFiche(db, { collaborateurId, mois })), figee: null };
+  return { ...(await calculerFiche(db, { collaborateurId, mois, aujourdhui })), figee: null };
 }
 
 // Un mois se clôture une fois terminé, par un directeur : instantané des fiches de tous les salariés actifs.
@@ -136,7 +141,7 @@ export async function cloturerMois(client, { mois, auteurId, aujourdhui, confirm
   if (await etatCloture(client, mois)) throw new ErreurMetier(409, 'Ce mois est déjà clôturé');
   const { rows } = await client.query('SELECT id FROM collaborateurs WHERE actif ORDER BY id');
   const fiches = [];
-  for (const { id } of rows) fiches.push(await calculerFiche(client, { collaborateurId: Number(id), mois }));
+  for (const { id } of rows) fiches.push(await calculerFiche(client, { collaborateurId: Number(id), mois, aujourdhui }));
   const enAttente = fiches.filter((f) => f.compteurs.provisoire);
   if (enAttente.length && !confirmerProvisoire) {
     throw new ErreurMetier(409, `${enAttente.length} salarié(s) ont des demandes en attente de décision sur ce mois : confirmez pour clôturer quand même`);

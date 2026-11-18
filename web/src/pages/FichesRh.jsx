@@ -129,6 +129,12 @@ export default function FichesRh() {
               Fiche provisoire : {nombre(c.absencesEnAttente)} jour(s) d'absence attendent une décision et ne sont comptés ni comme travaillés ni comme absents.
             </p>
           )}
+          {fiche.soldes?.length > 0 && (
+            <p className="aide">
+              <strong>Soldes de congés au {fiche.soldesAu.split('-').reverse().join('/')} :</strong>{' '}
+              {fiche.soldes.map((s) => `${s.libelle} ${nombre(s.solde)} j`).join(' · ')} — indicatif, les bulletins de paie font foi.
+            </p>
+          )}
           <div className="cartes">
             <table>
               <caption className="visuellement-cache">Jours et tickets</caption>

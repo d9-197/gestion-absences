@@ -3,6 +3,7 @@ import { champsModifies, parametresId } from './outils.js';
 
 const LISTE = `
   SELECT t.id, t.libelle, t.approbation_requise, t.confidentiel, t.delai_prevenance_jours, t.actif, t.ordre,
+         t.compteur_actif, t.dotation_annuelle, t.debut_periode_mois, t.report_automatique,
          EXISTS (SELECT 1 FROM demandes d WHERE d.type_id = t.id) AS utilise
   FROM types_absence t`;
 
@@ -15,6 +16,10 @@ const versJson = (t) => ({
   actif: t.actif,
   ordre: t.ordre,
   utilise: t.utilise,
+  compteurActif: t.compteur_actif,
+  dotationAnnuelle: t.dotation_annuelle === null ? null : Number(t.dotation_annuelle),
+  debutPeriodeMois: t.debut_periode_mois,
+  reportAutomatique: t.report_automatique,
 });
 
 const proprietes = {
@@ -23,10 +28,15 @@ const proprietes = {
   confidentiel: { type: 'boolean' },
   delaiPrevenanceJours: { type: ['integer', 'null'], minimum: 0, maximum: 365 },
   ordre: { type: 'integer', minimum: 0, maximum: 100000 },
+  compteurActif: { type: 'boolean' },
+  dotationAnnuelle: { type: ['number', 'null'], minimum: 0, maximum: 400, multipleOf: 0.5 },
+  debutPeriodeMois: { type: 'integer', minimum: 1, maximum: 12 },
+  reportAutomatique: { type: 'boolean' },
 };
 const colonnes = {
   libelle: 'libelle', approbationRequise: 'approbation_requise', confidentiel: 'confidentiel',
   delaiPrevenanceJours: 'delai_prevenance_jours', ordre: 'ordre', actif: 'actif',
+  compteurActif: 'compteur_actif', dotationAnnuelle: 'dotation_annuelle', debutPeriodeMois: 'debut_periode_mois', reportAutomatique: 'report_automatique',
 };
 
 export async function routesTypesAbsence(app, { pool }) {
@@ -44,12 +54,16 @@ export async function routesTypesAbsence(app, { pool }) {
   app.post('/types-absence', {
     schema: { body: { type: 'object', required: ['libelle'], additionalProperties: false, properties: proprietes } },
   }, async (requete, reponse) => {
-    const { libelle, approbationRequise = true, confidentiel = false, delaiPrevenanceJours = null, ordre } = requete.body;
+    const {
+      libelle, approbationRequise = true, confidentiel = false, delaiPrevenanceJours = null, ordre,
+      compteurActif = false, dotationAnnuelle = null, debutPeriodeMois = 1, reportAutomatique = true,
+    } = requete.body;
     const { rows } = await pool.query(
-      `INSERT INTO types_absence (libelle, approbation_requise, confidentiel, delai_prevenance_jours, ordre)
-       VALUES ($1, $2, $3, $4, COALESCE($5, (SELECT COALESCE(max(ordre), 0) + 10 FROM types_absence)))
+      `INSERT INTO types_absence (libelle, approbation_requise, confidentiel, delai_prevenance_jours, ordre,
+                                  compteur_actif, dotation_annuelle, debut_periode_mois, report_automatique)
+       VALUES ($1, $2, $3, $4, COALESCE($5, (SELECT COALESCE(max(ordre), 0) + 10 FROM types_absence)), $6, $7, $8, $9)
        RETURNING id`,
-      [libelle.trim(), approbationRequise, confidentiel, delaiPrevenanceJours, ordre ?? null],
+      [libelle.trim(), approbationRequise, confidentiel, delaiPrevenanceJours, ordre ?? null, compteurActif, dotationAnnuelle, debutPeriodeMois, reportAutomatique],
     );
     return reponse.code(201).send(await lire(rows[0].id));
   });

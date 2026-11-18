@@ -41,3 +41,4 @@ export const EVENEMENTS = {
   retrait: 'Demande retirée',
   annulation: 'Absence annulée',
 };
+export const nombre = (n) => n.toLocaleString('fr-FR');

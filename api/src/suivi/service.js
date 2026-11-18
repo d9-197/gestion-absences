@@ -25,7 +25,7 @@ export async function cadreDeModification(db, { utilisateur, collaborateurId, au
 }
 
 // Charge ce qu'il faut pour juger des jours d'un collaborateur : son équipe, son calendrier, ses absences, son suivi.
-export async function contexteJours(db, { collaborateurId, debut, fin }) {
+export async function contexteJours(db, { collaborateurId, debut, fin, ignorerDemandeId = null }) {
   const { rows } = await db.query('SELECT id, prenom, nom, equipe_id FROM collaborateurs WHERE id = $1', [collaborateurId]);
   if (!rows.length) throw introuvable('Collaborateur');
   const personne = rows[0];
@@ -34,8 +34,9 @@ export async function contexteJours(db, { collaborateurId, debut, fin }) {
     db.query(
       `SELECT d.id, d.type_id, d.date_debut, d.debut_demi_journee, d.date_fin, d.fin_demi_journee, d.statut
        FROM demandes_avec_statut d
-       WHERE d.collaborateur_id = $1 AND d.nature = 'absence' AND d.statut = ANY($4) AND d.date_debut <= $3 AND d.date_fin >= $2`,
-      [collaborateurId, debut, fin, STATUTS_ABSENCE],
+       WHERE d.collaborateur_id = $1 AND d.nature = 'absence' AND d.statut = ANY($4) AND d.date_debut <= $3 AND d.date_fin >= $2
+         AND ($5::bigint IS NULL OR d.id <> $5)`,
+      [collaborateurId, debut, fin, STATUTS_ABSENCE, ignorerDemandeId],
     ),
     lireSuivi(db, { ids: [collaborateurId], debut, fin }),
   ]);

@@ -4,6 +4,8 @@ import { useDonnees, useEnvoi } from '../../donnees.js';
 import Cadre from '../../composants/Cadre.jsx';
 import Dialogue, { ActionsDialogue } from '../../composants/Dialogue.jsx';
 
+const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
 function Formulaire({ type, onFermer, onEnregistre }) {
   const creation = !type;
   const [champs, setChamps] = useState({
@@ -12,6 +14,10 @@ function Formulaire({ type, onFermer, onEnregistre }) {
     confidentiel: type?.confidentiel ?? false,
     delai: type?.delaiPrevenanceJours ?? '',
     actif: type?.actif ?? true,
+    compteurActif: type?.compteurActif ?? false,
+    dotation: type?.dotationAnnuelle ?? '',
+    debutPeriodeMois: type?.debutPeriodeMois ?? 1,
+    reportAutomatique: type?.reportAutomatique ?? true,
   });
   const { enCours, erreur, envoyer } = useEnvoi();
   const cocher = (champ) => (e) => setChamps({ ...champs, [champ]: e.target.checked });
@@ -23,6 +29,10 @@ function Formulaire({ type, onFermer, onEnregistre }) {
       approbationRequise: champs.approbationRequise,
       confidentiel: champs.confidentiel,
       delaiPrevenanceJours: champs.delai === '' ? null : Number(champs.delai),
+      compteurActif: champs.compteurActif,
+      dotationAnnuelle: champs.dotation === '' ? null : Number(champs.dotation),
+      debutPeriodeMois: Number(champs.debutPeriodeMois),
+      reportAutomatique: champs.reportAutomatique,
     };
     const reussi = await envoyer(() => (creation
       ? appeler('/admin/types-absence', { methode: 'POST', corps })
@@ -51,6 +61,31 @@ function Formulaire({ type, onFermer, onEnregistre }) {
         <input id="t-delai" type="number" min="0" max="365" step="1" value={champs.delai}
           aria-describedby="aide-delai" onChange={(e) => setChamps({ ...champs, delai: e.target.value })} />
         <p id="aide-delai" className="aide">Laisser vide pour ne pas contrôler le délai.</p>
+        <label className="case">
+          <input type="checkbox" checked={champs.compteurActif} onChange={cocher('compteurActif')} />
+          Compteur de solde (indicatif)
+        </label>
+        <p className="aide">Suit un solde en jours par salarié. Il ne s'affiche que si les compteurs sont activés globalement (page « Compteurs »).</p>
+        {champs.compteurActif && (
+          <>
+            <label htmlFor="t-dotation">Droit annuel par défaut, en jours</label>
+            <input id="t-dotation" type="number" min="0" max="400" step="0.5" value={champs.dotation}
+              onChange={(e) => setChamps({ ...champs, dotation: e.target.value })} />
+            <p className="aide">Acquis par douzième au 1er de chaque mois. Un directeur peut fixer un droit différent pour un salarié. Sans droit, pas de solde.</p>
+            <label htmlFor="t-debut-periode">La période de référence commence le 1er…</label>
+            <select id="t-debut-periode" value={champs.debutPeriodeMois} onChange={(e) => setChamps({ ...champs, debutPeriodeMois: e.target.value })}>
+              {MOIS.map((nom, i) => <option key={nom} value={i + 1}>{nom}</option>)}
+            </select>
+            <label className="case">
+              <input type="checkbox" checked={champs.reportAutomatique} onChange={cocher('reportAutomatique')} />
+              Report automatique du reliquat
+            </label>
+            <p className="aide">
+              Activé : le reliquat de la période précédente s'ajoute à la suivante, sans limite, à condition que cette période ait été recalée par le salarié
+              (sans recalage, son solde est inconnu et rien n'est reporté). Désactivé : un directeur saisit le report de chaque salarié.
+            </p>
+          </>
+        )}
         {!creation && (
           <label className="case">
             <input type="checkbox" checked={champs.actif} onChange={cocher('actif')} />
@@ -102,7 +137,7 @@ export default function TypesAbsence() {
       <div className="tableau-defilant">
         <table>
           <thead>
-            <tr><th>Libellé</th><th>Approbation</th><th>Confidentiel</th><th>Délai de prévenance</th><th>Actions</th></tr>
+            <tr><th>Libellé</th><th>Approbation</th><th>Confidentiel</th><th>Délai de prévenance</th><th>Compteur</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {types.donnees.map((t) => (
@@ -111,6 +146,7 @@ export default function TypesAbsence() {
                 <td>{ouiNon(t.approbationRequise)}</td>
                 <td>{ouiNon(t.confidentiel)}</td>
                 <td>{t.delaiPrevenanceJours === null ? '—' : `${t.delaiPrevenanceJours} jour${t.delaiPrevenanceJours > 1 ? 's' : ''}`}</td>
+                <td>{t.compteurActif ? (t.dotationAnnuelle === null ? 'Sans droit défini' : `${t.dotationAnnuelle.toLocaleString('fr-FR')} j/an`) : '—'}</td>
                 <td className="actions-ligne">
                   <button className="bouton lien" type="button" onClick={() => setEdition(t)}
                     aria-label={`Modifier le type ${t.libelle}`}>Modifier</button>

@@ -18,7 +18,7 @@ export async function routesFiches(app, { pool, config, aujourdhui }) {
     const collaborateurId = requete.query.collaborateurId ?? Number(requete.utilisateur.id);
     await verifierAcces(pool, { utilisateur: requete.utilisateur, collaborateurId });
     await verifierMois(pool, { mois: requete.query.mois, aujourdhui: aujourdhui() });
-    return ficheDe(pool, { collaborateurId, mois: requete.query.mois });
+    return ficheDe(pool, { collaborateurId, mois: requete.query.mois, aujourdhui: aujourdhui() });
   });
 
   // `collaborateurIds` : plusieurs fiches (un valideur ou un directeur) ; sans, la sienne.
@@ -38,7 +38,7 @@ export async function routesFiches(app, { pool, config, aujourdhui }) {
     await verifierMois(pool, { mois: requete.query.mois, aujourdhui: aujourdhui() });
 
     const fiches = [];
-    for (const id of ids) fiches.push(await ficheDe(pool, { collaborateurId: id, mois: requete.query.mois }));
+    for (const id of ids) fiches.push(await ficheDe(pool, { collaborateurId: id, mois: requete.query.mois, aujourdhui: aujourdhui() }));
     fiches.sort((a, b) => a.collaborateur.nom.localeCompare(b.collaborateur.nom, 'fr') || a.collaborateur.prenom.localeCompare(b.collaborateur.prenom, 'fr'));
     const parametres = await chargerParametresPdf(pool);
     const pdf = await genererFichesPdf(fiches, {

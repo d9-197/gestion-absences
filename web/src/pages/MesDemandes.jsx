@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { appeler } from '../api.js';
 import { notifierChangement, useDonnees } from '../donnees.js';
@@ -8,6 +8,7 @@ import Cadre from '../composants/Cadre.jsx';
 import DetailDemande from '../composants/DetailDemande.jsx';
 import FormulaireDemande, { initialePourModification } from '../composants/FormulaireDemande.jsx';
 import Statut from '../composants/Statut.jsx';
+import Soldes from '../composants/Soldes.jsx';
 
 // Ce qui est terminé et sans suite : refusées, retirées, annulées, et les annulations déjà décidées.
 const estHistorique = (d) => ['refusee', 'retiree', 'annulee'].includes(d.statut) || (d.nature === 'annulation' && d.statut !== 'en_attente');
@@ -15,6 +16,9 @@ const estModifiable = (d) => d.nature === 'absence' && d.statut === 'en_attente'
 
 export default function MesDemandes() {
   const demandes = useDonnees('/demandes?portee=mes');
+  const soldes = useDonnees('/compteurs');
+  const rechargerSoldes = soldes.recharger;
+  useEffect(() => { rechargerSoldes(); }, [demandes.donnees, rechargerSoldes]); // une demande décidée ou posée change le solde
   const [parametres, setParametres] = useSearchParams();
   const [nouvelle, setNouvelle] = useState(parametres.get('nouvelle') === '1');
   const [detail, setDetail] = useState(null); // { id, mode }
@@ -92,6 +96,7 @@ export default function MesDemandes() {
       </div>
       {info && <p className="message succes" role="status">{info}</p>}
       {erreur && <p className="message erreur" role="alert">{erreur}</p>}
+      <Soldes donnees={soldes.donnees} peutRecaler onChange={soldes.recharger} />
       {nbHistorique > 0 && (
         <label className="case">
           <input type="checkbox" checked={avecHistorique} onChange={(e) => setAvecHistorique(e.target.checked)} />

@@ -9,6 +9,7 @@ const ECRANS_ADMIN = [
   ['/admin/collaborateurs', 'Collaborateurs'],
   ['/admin/equipes', 'Équipes'],
   ['/admin/types-absence', "Types d'absence"],
+  ['/admin/compteurs', 'Compteurs'],
   ['/admin/calendrier', 'Calendrier'],
   ['/admin/emails', 'E-mails'],
   ['/admin/conservation', 'Conservation'],

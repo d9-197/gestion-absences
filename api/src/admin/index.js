@@ -6,6 +6,7 @@ import { routesImportCollaborateurs } from './import-collaborateurs.js';
 import { routesAdminNotifications } from './notifications.js';
 import { routesTableauDeBord } from './tableau-de-bord.js';
 import { routesEquipes } from './equipes.js';
+import { routesAdminCompteurs } from '../compteurs/routes.js';
 import { routesTypesAbsence } from './types-absence.js';
 import { journaliser, routesJournal } from './journal.js';
 
@@ -25,5 +26,6 @@ export async function routesAdmin(app, { pool, config, courriel, aujourdhui }) {
   await app.register(routesAdminEmails, options);
   await app.register(routesAdminConservation, options);
   await app.register(routesAdminNotifications, options);
+  await app.register(routesAdminCompteurs, options);
   await app.register(routesTableauDeBord, options);
 }

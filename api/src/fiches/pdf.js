@@ -140,6 +140,13 @@ function dessinerFiche(doc, fiche, { raisonSociale, editeePar, fuseau, maintenan
     "Un ticket restaurant est dû chaque jour travaillé sans aucune absence, même d'une demi-journée, et non retiré par le salarié. "
     + `Les jours sont comptés en jours ouvrés : jours travaillés + absences confirmées + demandes en attente = jours ouvrés.`,
     gauche, y, { width: largeur });
+  if (fiche.soldes?.length) {
+    doc.moveDown(0.4);
+    const au = fiche.soldesAu.split('-').reverse().join('/');
+    doc.font('Helvetica-Bold').fillColor(NOIR).text(
+      `Soldes de congés au ${au} : ${fiche.soldes.map((s) => `${s.libelle} ${nombre(s.solde)} j`).join(' - ')}`, gauche, doc.y, { width: largeur });
+    doc.font('Helvetica').fillColor(GRIS).text("Indicatif : les soldes figurant sur les bulletins de paie font foi.", gauche, doc.y, { width: largeur });
+  }
   if (c.provisoire) {
     doc.moveDown(0.4);
     doc.font('Helvetica-Bold').fillColor('#8f1d1d')
