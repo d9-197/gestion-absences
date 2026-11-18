@@ -102,15 +102,17 @@ test('toutes les routes exigent une connexion', options, async () => {
 
 // --- Qui peut valider --------------------------------------------------------
 
-test('valideurs : équipe, équipes parentes, délégués et directeurs, jamais soi-même', options, async () => {
+test('valideurs : équipe, équipes parentes, délégués et directeurs, un directeur peut valider ses propres demandes, pas les autres rôles', options, async () => {
   const valideurs = async (id) => nombres((await pool.query('SELECT v FROM valideurs_de($1) v', [id])).rows.map((r) => r.v));
   // Alice : responsable de Développement, son délégué, responsable de Technique, directeurs.
   assert.deepEqual(await valideurs(ids.alice), nombres([ids.carla, ids.dan, ids.bob, ids.diane, ids.eric]));
   // Le responsable d'une équipe est validé par l'équipe au-dessus, pas par la sienne ni par son délégué.
   assert.deepEqual(await valideurs(ids.carla), nombres([ids.bob, ids.diane, ids.eric]));
   assert.deepEqual(await valideurs(ids.bob), nombres([ids.diane, ids.eric]));
-  // Un directeur est validé par les autres directeurs.
-  assert.deepEqual(await valideurs(ids.diane), [ids.eric]);
+  // Un directeur est validé par tous les directeurs, lui compris ; les notifications vont d'abord aux autres.
+  assert.deepEqual(await valideurs(ids.diane), nombres([ids.diane, ids.eric]));
+  const proches = async (id) => nombres((await pool.query('SELECT v FROM valideurs_proches_de($1) v', [id])).rows.map((r) => r.v));
+  assert.deepEqual(await proches(ids.diane), [ids.eric]);
   // Une équipe sans responsable remonte aux directeurs.
   assert.deepEqual(await valideurs(ids.chloe), nombres([ids.diane, ids.eric]));
 });
@@ -272,16 +274,17 @@ test('saisie pour un autre : réservée à ses valideurs', options, async () => 
 });
 
 test('une demande qui ne pourrait être validée par personne est refusée', options, async () => {
-  await pool.query('UPDATE collaborateurs SET actif = false WHERE id = $1', [ids.eric]);
+  // Bob (responsable) n'a de valideurs que les directeurs : sans directeur actif, sa demande ne peut aboutir.
+  await pool.query('UPDATE collaborateurs SET actif = false WHERE id = ANY($1)', [[ids.eric, ids.diane]]);
   try {
     const corps = { typeId: ids.conges, ...semaine('2027-04-12') };
-    const apercu = (await appel('diane', 'POST', '/api/demandes/previsualisation', corps)).json();
+    const apercu = (await appel('bob', 'POST', '/api/demandes/previsualisation', corps)).json();
     assert.match(apercu.blocage, /Personne d'autre ne peut valider/);
-    assert.equal((await appel('diane', 'POST', '/api/demandes', corps)).statusCode, 409);
+    assert.equal((await appel('bob', 'POST', '/api/demandes', corps)).statusCode, 409);
     // Une simple déclaration, sans approbation, reste possible.
-    await demander('diane', { typeId: ids.maladie, ...semaine('2027-04-12') });
+    await demander('bob', { typeId: ids.maladie, ...semaine('2027-04-12') });
   } finally {
-    await pool.query('UPDATE collaborateurs SET actif = true WHERE id = $1', [ids.eric]);
+    await pool.query('UPDATE collaborateurs SET actif = true WHERE id = ANY($1)', [[ids.eric, ids.diane]]);
   }
 });
 
@@ -321,7 +324,7 @@ test('refus : le motif est obligatoire', options, async () => {
   assert.equal((await decider('bob', autre.id, 'approbation', 'ok')).json().motif, null);
 });
 
-test('personne ne traite sa propre demande, ni celle d\'une autre branche', options, async () => {
+test('seul un directeur traite sa propre demande ; personne ne traite celle d\'une autre branche', options, async () => {
   const demande = await demander('alice', semaine('2027-02-08'));
   assert.equal((await decider('alice', demande.id, 'approbation')).statusCode, 403);
   assert.equal((await decider('chloe', demande.id, 'approbation')).statusCode, 404);
@@ -335,9 +338,13 @@ test('personne ne traite sa propre demande, ni celle d\'une autre branche', opti
   assert.equal((await decider('bob', responsable.id, 'approbation')).statusCode, 200);
 
   const directeur = await demander('diane', semaine('2027-02-15'));
-  assert.equal((await decider('diane', directeur.id, 'approbation')).statusCode, 403);
   assert.equal((await decider('bob', directeur.id, 'approbation')).statusCode, 404);
-  assert.equal((await decider('eric', directeur.id, 'approbation')).statusCode, 200);
+  const parSoi = await decider('diane', directeur.id, 'approbation');
+  assert.equal(parSoi.statusCode, 200);
+  assert.equal(parSoi.json().statutPar.id, ids.diane);
+  // Un autre directeur peut aussi la traiter.
+  const autreDirecteur = await demander('diane', semaine('2027-02-16'));
+  assert.equal((await decider('eric', autreDirecteur.id, 'approbation')).statusCode, 200);
 });
 
 test('le délégué traite à la place du responsable', options, async () => {
@@ -607,7 +614,7 @@ test('listes : mes demandes et demandes à gérer', options, async () => {
   const parDiane = await geree('diane');
   const auteurs = new Set(parDiane.map((d) => d.collaborateur.id));
   for (const id of [ids.alice, ids.chloe, ids.eric, ids.carla]) assert.ok(auteurs.has(id), `diane ne voit pas ${id}`);
-  assert.ok(!auteurs.has(ids.diane)); // ses propres demandes sont dans « mes demandes »
+  assert.ok(auteurs.has(ids.diane)); // un directeur traite aussi ses propres demandes
 
   for (const qui of ['carla', 'bob', 'diane', 'chloe']) {
     const compteur = (await appel(qui, 'GET', '/api/demandes/compteur')).json();
