@@ -20,6 +20,7 @@ export default function FichesRh() {
   const [fiche, setFiche] = useState(null);
   const [erreurFiche, setErreurFiche] = useState('');
   const [info, setInfo] = useState('');
+  const [versionCloture, setVersionCloture] = useState(0);
   const { enCours, erreur, envoyer } = useEnvoi();
 
   useEffect(() => {
@@ -30,7 +31,42 @@ export default function FichesRh() {
       .then((f) => { if (!annule) setFiche(f); })
       .catch((e) => { if (!annule) setErreurFiche(e.message); });
     return () => { annule = true; };
-  }, [mois, collaborateurId]);
+  }, [mois, collaborateurId, versionCloture]);
+
+  const directeur = utilisateur.role === 'directeur';
+  const [cloture, setCloture] = useState(undefined); // undefined : inconnu ; null : mois ouvert
+  useEffect(() => {
+    if (!directeur) return undefined;
+    let annule = false;
+    setCloture(undefined);
+    appeler(`/fiches-rh/cloture?mois=${mois}`).then((r) => { if (!annule) setCloture(r.cloture); }).catch(() => {});
+    return () => { annule = true; };
+  }, [mois, directeur, versionCloture]);
+  const moisTermine = mois < texteMois(moisCourant());
+  const actualiser = () => { setVersionCloture((v) => v + 1); };
+
+  const cloturer = () => envoyer(async () => {
+    setInfo('');
+    let confirmer = false;
+    try {
+      await appeler('/fiches-rh/cloture', { methode: 'POST', corps: { mois } });
+    } catch (e) {
+      if (e.statut !== 409 || !/en attente/.test(e.message) || !window.confirm(`${e.message}.`)) throw e;
+      confirmer = true;
+    }
+    if (confirmer) await appeler('/fiches-rh/cloture', { methode: 'POST', corps: { mois, confirmerProvisoire: true } });
+    setInfo(`${libelleMois(mois)} est clôturé : les fiches sont figées.`);
+    actualiser();
+  });
+  const rouvrir = () => {
+    if (!window.confirm(`Rouvrir ${libelleMois(mois)} ? Les fiches seront de nouveau recalculées et les saisies TT/TR redeviennent possibles.`)) return;
+    envoyer(async () => {
+      setInfo('');
+      await appeler('/fiches-rh/reouverture', { methode: 'POST', corps: { mois } });
+      setInfo(`${libelleMois(mois)} est rouvert.`);
+      actualiser();
+    });
+  };
 
   const liste = valideur ? (personnes.donnees ?? []) : [];
   const pdf = (ids) => envoyer(async () => {
@@ -66,6 +102,18 @@ export default function FichesRh() {
           </button>
         )}
       </div>
+      {directeur && cloture !== undefined && (
+        <p className={cloture ? 'message succes' : 'aide'}>
+          {cloture
+            ? <>Mois clôturé le {new Date(cloture.le).toLocaleString('fr-FR')} par {cloture.par} : les fiches sont figées et les saisies TT/TR sont bloquées. </>
+            : <>Mois ouvert : les fiches sont recalculées à chaque consultation. </>}
+          {cloture
+            ? <button className="bouton secondaire compact" type="button" disabled={enCours} onClick={rouvrir}>Rouvrir le mois</button>
+            : moisTermine
+              ? <button className="bouton compact" type="button" disabled={enCours} onClick={cloturer}>Clôturer le mois</button>
+              : <em>(clôture possible une fois le mois terminé)</em>}
+        </p>
+      )}
       <p className="aide">
         Le PDF contient le calendrier du mois (absences, TT télétravail, TR tickets restaurant) et les compteurs. Les données ne sont conservées que pendant la durée
         de conservation réglée par la direction : téléchargez la fiche d'un mois avant qu'il n'en sorte, si vous devez la garder.
@@ -75,6 +123,7 @@ export default function FichesRh() {
       {fiche && (
         <section aria-labelledby="titre-fiche">
           <h2 id="titre-fiche">{nomComplet(fiche.collaborateur)} · {libelleMois(fiche.mois)}</h2>
+          {fiche.figee && <p className="message succes">Fiche figée à la clôture du mois, le {new Date(fiche.figee.le).toLocaleString('fr-FR')} par {fiche.figee.par}.</p>}
           {c.provisoire && (
             <p className="message alerte">
               Fiche provisoire : {nombre(c.absencesEnAttente)} jour(s) d'absence attendent une décision et ne sont comptés ni comme travaillés ni comme absents.

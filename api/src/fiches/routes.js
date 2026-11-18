@@ -1,7 +1,8 @@
 import { ErreurMetier } from '../erreurs.js';
 import { chargerParametresPdf } from '../emails/donnees.js';
 import { genererFichesPdf } from './pdf.js';
-import { calculerFiche, verifierAcces, verifierMois } from './service.js';
+import { transaction } from '../admin/outils.js';
+import { cloturerMois, etatCloture, ficheDe, rouvrirMois, verifierAcces, verifierMois } from './service.js';
 
 const mois = { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' };
 const NOMBRE_MAX = 100;
@@ -16,7 +17,7 @@ export async function routesFiches(app, { pool, config, aujourdhui }) {
     const collaborateurId = requete.query.collaborateurId ?? Number(requete.utilisateur.id);
     await verifierAcces(pool, { utilisateur: requete.utilisateur, collaborateurId });
     await verifierMois(pool, { mois: requete.query.mois, aujourdhui: aujourdhui() });
-    return calculerFiche(pool, { collaborateurId, mois: requete.query.mois });
+    return ficheDe(pool, { collaborateurId, mois: requete.query.mois });
   });
 
   // `collaborateurIds` : plusieurs fiches (un valideur ou un directeur) ; sans, la sienne.
@@ -36,7 +37,7 @@ export async function routesFiches(app, { pool, config, aujourdhui }) {
     await verifierMois(pool, { mois: requete.query.mois, aujourdhui: aujourdhui() });
 
     const fiches = [];
-    for (const id of ids) fiches.push(await calculerFiche(pool, { collaborateurId: id, mois: requete.query.mois }));
+    for (const id of ids) fiches.push(await ficheDe(pool, { collaborateurId: id, mois: requete.query.mois }));
     fiches.sort((a, b) => a.collaborateur.nom.localeCompare(b.collaborateur.nom, 'fr') || a.collaborateur.prenom.localeCompare(b.collaborateur.prenom, 'fr'));
     const parametres = await chargerParametresPdf(pool);
     const pdf = await genererFichesPdf(fiches, {
@@ -50,5 +51,28 @@ export async function routesFiches(app, { pool, config, aujourdhui }) {
       .header('Content-Disposition', `attachment; filename="${nom.normalize('NFD').replace(/[^\w.-]+/g, '_')}.pdf"`)
       .header('Cache-Control', 'no-store')
       .send(pdf);
+  });
+
+  // Clôture et réouverture d'un mois : réservées aux directeurs.
+  const directeur = async (requete) => {
+    if (requete.utilisateur.role !== 'directeur') throw new ErreurMetier(403, 'Réservé aux directeurs');
+  };
+  const corps = { type: 'object', required: ['mois'], additionalProperties: false, properties: { mois, confirmerProvisoire: { type: 'boolean' } } };
+
+  app.get('/fiches-rh/cloture', {
+    onRequest: directeur, schema: { querystring: { type: 'object', required: ['mois'], properties: { mois } } },
+  }, async (requete) => ({ cloture: await etatCloture(pool, requete.query.mois) }));
+
+  app.post('/fiches-rh/cloture', { onRequest: directeur, schema: { body: corps } }, async (requete, reponse) => {
+    await verifierMois(pool, { mois: requete.body.mois, aujourdhui: aujourdhui() });
+    const nombre = await transaction(pool, (client) => cloturerMois(client, {
+      mois: requete.body.mois, auteurId: Number(requete.utilisateur.id), aujourdhui: aujourdhui(), confirmerProvisoire: requete.body.confirmerProvisoire,
+    }));
+    return reponse.code(201).send({ fiches: nombre, cloture: await etatCloture(pool, requete.body.mois) });
+  });
+
+  app.post('/fiches-rh/reouverture', { onRequest: directeur, schema: { body: corps } }, async (requete) => {
+    await transaction(pool, (client) => rouvrirMois(client, { mois: requete.body.mois, auteurId: Number(requete.utilisateur.id) }));
+    return { cloture: null };
   });
 }

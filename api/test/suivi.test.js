@@ -226,3 +226,50 @@ test('fiche RH en PDF : une page par salarié, titre exigé', options, async () 
   assert.equal((await appel('alice', 'GET', `/api/fiches-rh/pdf?mois=2026-11&collaborateurIds=${ids.bob}`)).statusCode, 404);
   assert.equal((await appel('diane', 'GET', '/api/fiches-rh/pdf?mois=2026-11&collaborateurIds=a,b')).statusCode, 400);
 });
+
+test('clôture du mois : fiches figées, saisies bloquées, réouverture tracée', options, async () => {
+  const mois = '2026-10';
+  const fiche = async (qui, id) => appel(qui, 'GET', `/api/fiches-rh?mois=${mois}&collaborateurId=${id}`);
+
+  // Réservé aux directeurs, et seulement un mois terminé.
+  assert.equal((await appel('bob', 'POST', '/api/fiches-rh/cloture', { mois })).statusCode, 403);
+  assert.equal((await appel('alice', 'GET', `/api/fiches-rh/cloture?mois=${mois}`)).statusCode, 403);
+  assert.equal((await appel('diane', 'POST', '/api/fiches-rh/cloture', { mois: '2026-11' })).statusCode, 400);
+  assert.equal((await appel('diane', 'GET', `/api/fiches-rh/cloture?mois=${mois}`)).json().cloture, null);
+
+  // Une demande en attente sur le mois demande une confirmation explicite.
+  const attente = await demander('alice', { dateDebut: '2026-10-12', dateFin: '2026-10-12' });
+  const refus = await appel('diane', 'POST', '/api/fiches-rh/cloture', { mois });
+  assert.equal(refus.statusCode, 409);
+  assert.match(refus.json().erreur, /en attente/);
+  assert.equal((await appel('diane', 'POST', '/api/fiches-rh/cloture', { mois, confirmerProvisoire: true })).statusCode, 201);
+  assert.equal((await appel('diane', 'POST', '/api/fiches-rh/cloture', { mois, confirmerProvisoire: true })).statusCode, 409, 'déjà clôturé');
+  assert.ok(attente.id);
+
+  const avant = (await fiche('alice', ids.alice)).json();
+  assert.equal(avant.figee.par, 'diane diane');
+  assert.equal(avant.compteurs.absencesEnAttente, 1);
+
+  // Les saisies TT/TR du mois clôturé sont refusées, même pour un directeur ; un autre mois reste libre.
+  const refusTt = await appel('diane', 'PUT', '/api/suivi/teletravail', { collaborateurId: ids.alice, jours: ['2026-10-13'], teletravail: true });
+  assert.equal(refusTt.statusCode, 403, refusTt.body);
+  assert.match(refusTt.json().erreur, /clôturé/);
+  assert.equal((await appel('alice', 'PUT', '/api/suivi/teletravail', { jours: ['2026-11-18'], teletravail: true })).statusCode, 200);
+
+  // La fiche reste figée même si la situation change : la demande en attente est approuvée.
+  const decision = await appel('bob', 'POST', `/api/demandes/${attente.id}/decision`, { decision: 'approbation' });
+  assert.equal(decision.statusCode, 200, decision.body);
+  assert.deepEqual((await fiche('alice', ids.alice)).json().compteurs, avant.compteurs);
+
+  // Réouverture : directeur seulement, la fiche est de nouveau calculée.
+  assert.equal((await appel('bob', 'POST', '/api/fiches-rh/reouverture', { mois })).statusCode, 403);
+  assert.equal((await appel('diane', 'POST', '/api/fiches-rh/reouverture', { mois })).statusCode, 200);
+  assert.equal((await appel('diane', 'POST', '/api/fiches-rh/reouverture', { mois })).statusCode, 409);
+  const apres = (await fiche('alice', ids.alice)).json();
+  assert.equal(apres.figee, null);
+  assert.equal(apres.compteurs.absencesEnAttente, 0);
+  const { rows } = await pool.query(`SELECT action FROM clotures_mois WHERE mois = '2026-10-01' ORDER BY id`);
+  assert.deepEqual(rows.map((r) => r.action), ['cloture', 'reouverture']);
+  await assert.rejects(pool.query(`UPDATE clotures_mois SET action = 'cloture'`), /permission denied|ajout seul/);
+  assert.equal((await appel('diane', 'PUT', '/api/suivi/teletravail', { collaborateurId: ids.alice, jours: ['2026-10-13'], teletravail: true })).statusCode, 200);
+});

@@ -53,9 +53,20 @@ export async function contexteJours(db, { collaborateurId, debut, fin }) {
 
 export async function ajouterEvenements(client, { collaborateurId, auteurId, objet, action, jours, motif }) {
   if (!jours.length) return;
+  await verifierJoursOuverts(client, jours);
   await client.query(
     `INSERT INTO suivi_evenements (collaborateur_id, jour, objet, action, motif, auteur_id)
      SELECT $1, j, $2, $3, $4, $5 FROM unnest($6::date[]) AS j`,
     [collaborateurId, objet, action, motif ?? null, auteurId, jours],
   );
+}
+
+// Les saisies de tickets et de télétravail ne sont plus possibles sur un mois clôturé (il faut d'abord le rouvrir).
+export async function verifierJoursOuverts(db, jours) {
+  const mois = [...new Set(jours.map((j) => `${j.slice(0, 7)}-01`))];
+  if (!mois.length) return;
+  const { rows } = await db.query(
+    `SELECT to_char(mois, 'YYYY-MM') AS mois FROM clotures_actuelles WHERE action = 'cloture' AND mois = ANY($1::date[])`, [mois],
+  );
+  if (rows.length) throw new ErreurMetier(403, `Le mois ${rows[0].mois} est clôturé : un directeur doit le rouvrir avant toute modification`);
 }

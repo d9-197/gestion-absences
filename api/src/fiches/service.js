@@ -105,3 +105,50 @@ export async function verifierMois(db, { mois, aujourdhui }) {
   if (fin < limiteBasse) throw new ErreurMetier(400, `Les données de ce mois ont plus de ${passe} mois : elles ne sont plus conservées`);
   if (debut > ajouterMois(aujourdhui, futur)) throw new ErreurMetier(400, `Ce mois est à plus de ${futur} mois`);
 }
+
+// État de clôture d'un mois : null si le mois est ouvert, sinon qui l'a clôturé et quand.
+export async function etatCloture(db, mois) {
+  const { rows } = await db.query(
+    `SELECT c.cree_le, c.action, c.auteur_id, a.prenom, a.nom
+     FROM clotures_actuelles c JOIN collaborateurs a ON a.id = c.auteur_id WHERE c.mois = $1`,
+    [`${mois}-01`],
+  );
+  if (!rows.length || rows[0].action !== 'cloture') return null;
+  return { le: rows[0].cree_le.toISOString(), par: `${rows[0].prenom} ${rows[0].nom}` };
+}
+
+// La fiche à présenter : l'instantané pris à la clôture s'il existe pour ce salarié, sinon le calcul à la volée.
+export async function ficheDe(db, { collaborateurId, mois }) {
+  const { rows } = await db.query(
+    `SELECT c.fiches, c.cree_le, a.prenom, a.nom
+     FROM clotures_actuelles c JOIN collaborateurs a ON a.id = c.auteur_id WHERE c.mois = $1 AND c.action = 'cloture'`,
+    [`${mois}-01`],
+  );
+  const figee = rows[0]?.fiches?.find((f) => f.collaborateur.id === collaborateurId);
+  if (figee) return { ...figee, figee: { le: rows[0].cree_le.toISOString(), par: `${rows[0].prenom} ${rows[0].nom}` } };
+  return { ...(await calculerFiche(db, { collaborateurId, mois })), figee: null };
+}
+
+// Un mois se clôture une fois terminé, par un directeur : instantané des fiches de tous les salariés actifs.
+export async function cloturerMois(client, { mois, auteurId, aujourdhui, confirmerProvisoire }) {
+  const [debut] = bornesDuMois(mois);
+  if (debut >= `${aujourdhui.slice(0, 7)}-01`) throw new ErreurMetier(400, "Un mois ne peut être clôturé qu'une fois terminé");
+  if (await etatCloture(client, mois)) throw new ErreurMetier(409, 'Ce mois est déjà clôturé');
+  const { rows } = await client.query('SELECT id FROM collaborateurs WHERE actif ORDER BY id');
+  const fiches = [];
+  for (const { id } of rows) fiches.push(await calculerFiche(client, { collaborateurId: Number(id), mois }));
+  const enAttente = fiches.filter((f) => f.compteurs.provisoire);
+  if (enAttente.length && !confirmerProvisoire) {
+    throw new ErreurMetier(409, `${enAttente.length} salarié(s) ont des demandes en attente de décision sur ce mois : confirmez pour clôturer quand même`);
+  }
+  await client.query(
+    `INSERT INTO clotures_mois (mois, action, fiches, auteur_id) VALUES ($1, 'cloture', $2, $3)`,
+    [debut, JSON.stringify(fiches), auteurId],
+  );
+  return fiches.length;
+}
+
+export async function rouvrirMois(client, { mois, auteurId }) {
+  if (!(await etatCloture(client, mois))) throw new ErreurMetier(409, "Ce mois n'est pas clôturé");
+  await client.query(`INSERT INTO clotures_mois (mois, action, auteur_id) VALUES ($1, 'reouverture', $2)`, [`${mois}-01`, auteurId]);
+}
