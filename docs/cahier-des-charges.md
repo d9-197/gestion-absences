@@ -55,6 +55,7 @@ Les collaborateurs et les équipes sont saisis à la main par le directeur.
 - Le responsable d'une équipe parente voit et valide aussi les sous-équipes, à tous les niveaux.
 - Un délégué, lui-même doté du rôle responsable, peut valider à la place du responsable. Il a les mêmes droits que lui sur les équipes déléguées.
 - Les demandes d'un responsable sont validées par le responsable de l'équipe parente, ou à défaut par un directeur.
+- Un directeur valide lui-même ses propres demandes (décision du 18 novembre 2026), avec les autres directeurs s'il y en a. La décision est tracée à son nom et le PDF part à tous les directeurs.
 - Un collaborateur désactivé (départ) ne peut plus se connecter, mais ses demandes restent consultables jusqu'à leur purge.
 
 ## 5. Types d'absences

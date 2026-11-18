@@ -349,3 +349,37 @@ test('import de collaborateurs : simulation, tout ou rien, rapport par ligne', o
   const journal = (await appel('diane', 'GET', '/api/admin/journal?limite=5')).json().lignes.find((l) => l.action === 'Import de collaborateurs');
   assert.match(journal.details.corps.csv, /^\(fichier de \d+ caractères\)$/);
 });
+
+// --- Un directeur valide ses propres congés -----------------------------------------------------------------------
+
+test('un directeur seul valide ses propres congés, avec trace', options, async () => {
+  assert.deepEqual(await valideursDe(ids.diane), [ids.diane]);
+  const proches = (await pool.query('SELECT valideurs_proches_de($1) AS v', [ids.diane])).rows.map((r) => Number(r.v));
+  assert.deepEqual(proches, [ids.diane], 'seul directeur : il est son propre valideur');
+  // Un responsable ne se valide toujours pas lui-même.
+  assert.ok(!(await valideursDe(ids.bob)).includes(ids.bob));
+
+  const apercu = await appel('diane', 'POST', '/api/demandes/previsualisation', { typeId: ids.conges, dateDebut: '2027-07-05', dateFin: '2027-07-09' });
+  assert.equal(apercu.statusCode, 200);
+  assert.deepEqual(apercu.json().valideurs.map((v) => v.nom), ['diane']);
+
+  const demande = await demander('diane', { dateDebut: '2027-07-05', dateFin: '2027-07-09' });
+  assert.equal(demande.actions.decider, true);
+  const approbation = await decider('diane', demande.id, 'approbation');
+  assert.equal(approbation.statusCode, 200, approbation.body);
+  const lue = approbation.json();
+  assert.equal(lue.statut, 'approuvee');
+  // La trace montre qui a décidé : la même personne que le demandeur.
+  assert.equal(lue.statutPar.id, ids.diane);
+  assert.equal(lue.collaborateur.id, ids.diane);
+
+  // Elle apparaît dans ses demandes à traiter, et l'approbation en lot fonctionne aussi.
+  const autre = await demander('diane', { dateDebut: '2027-08-02', dateFin: '2027-08-03' });
+  assert.ok((await appel('diane', 'GET', '/api/demandes?portee=gerees&statut=en_attente')).json().some((d) => d.id === autre.id));
+  assert.deepEqual((await appel('diane', 'POST', '/api/demandes/decision-lot', { ids: [autre.id] })).json().approuvees, [autre.id]);
+
+  // Personne d'autre ne peut décider à sa place.
+  const encore = await demander('diane', { dateDebut: '2027-09-06', dateFin: '2027-09-07' });
+  assert.equal((await decider('bob', encore.id, 'approbation')).statusCode, 404);
+  assert.equal((await decider('alice', encore.id, 'refus', 'non')).statusCode, 404);
+});
