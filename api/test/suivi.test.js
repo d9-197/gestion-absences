@@ -256,6 +256,9 @@ test('clôture du mois : fiches figées, saisies bloquées, réouverture tracée
   assert.match(refusTt.json().erreur, /clôturé/);
   assert.equal((await appel('alice', 'PUT', '/api/suivi/teletravail', { jours: ['2026-11-18'], teletravail: true })).statusCode, 200);
 
+  assert.deepEqual((await planning('alice', '2026-10-01', '2026-10-31')).moisClotures, ['2026-10']);
+  assert.deepEqual((await planning('alice', '2026-11-01', '2026-11-30')).moisClotures, []);
+
   // La fiche reste figée même si la situation change : la demande en attente est approuvée.
   const decision = await appel('bob', 'POST', `/api/demandes/${attente.id}/decision`, { decision: 'approbation' });
   assert.equal(decision.statusCode, 200, decision.body);
@@ -267,6 +270,7 @@ test('clôture du mois : fiches figées, saisies bloquées, réouverture tracée
   assert.equal((await appel('diane', 'POST', '/api/fiches-rh/reouverture', { mois })).statusCode, 409);
   const apres = (await fiche('alice', ids.alice)).json();
   assert.equal(apres.figee, null);
+  assert.deepEqual((await planning('alice', '2026-10-01', '2026-10-31')).moisClotures, []);
   assert.equal(apres.compteurs.absencesEnAttente, 0);
   const { rows } = await pool.query(`SELECT action FROM clotures_mois WHERE mois = '2026-10-01' ORDER BY id`);
   assert.deepEqual(rows.map((r) => r.action), ['cloture', 'reouverture']);

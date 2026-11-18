@@ -12,6 +12,7 @@ import DetailDemande from '../composants/DetailDemande.jsx';
 import FormulaireDemande, { initialePourModification } from '../composants/FormulaireDemande.jsx';
 
 const NOMBRE_COULEURS = 8;
+const libelleMoisClos = (m) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const STATUTS = { confirmee: 'Confirmée', en_attente: 'En attente' };
 
 // Réglages mémorisés dans le navigateur, propres à chaque utilisateur : la vue et le filtre d'équipe.
@@ -58,6 +59,7 @@ export default function Planning() {
   const [suiviOuvert, setSuiviOuvert] = useState(null); // { personneId, jour } : détail tickets et télétravail
   const [serie, setSerie] = useState(false);
   const [erreurSuivi, setErreurSuivi] = useState('');
+  const [suppression, setSuppression] = useState(() => new Set()); // cases en cours de décochage : surlignées en rouge
   // Les indications de ticket et de télétravail sous chaque ligne se masquent, pour alléger une grille chargée.
   const [afficherSuivi, setAfficherSuivi] = useState(() => lireReglages(utilisateur.id).suivi ?? true);
 
@@ -135,13 +137,17 @@ export default function Planning() {
   // Coche ou décoche TT ou TR pour des jours d'une personne ; l'API juge de ce qui est permis.
   async function basculerSuivi(objet, personneId, joursVises, cible) {
     setErreurSuivi('');
+    // Décocher une case cochée : elle passe au rouge le temps de l'enregistrement.
+    const rouges = cible ? [] : joursVises.map((j) => `${objet}-${personneId}-${j}`);
+    setSuppression((s) => new Set([...s, ...rouges]));
     try {
       if (objet === 'tt') await appeler('/suivi/teletravail', { methode: 'PUT', corps: { collaborateurId: personneId, jours: joursVises, teletravail: cible } });
       else await appeler('/suivi/tickets', { methode: 'PUT', corps: { collaborateurId: personneId, jours: joursVises, retire: !cible } });
     } catch (e) {
       setErreurSuivi(e.message);
     }
-    planning.recharger();
+    await planning.recharger?.();
+    setSuppression((s) => { const n = new Set(s); rouges.forEach((r) => n.delete(r)); return n; });
   }
   // Glisser la souris sur une ligne TT ou TR coche (ou décoche) toute la plage d'un coup ; un simple clic bascule un jour.
   const commencerPeinture = (evenement) => {
@@ -159,13 +165,13 @@ export default function Planning() {
     const bouton = evenement.target.closest?.('button.case-suivi');
     if (!p || !bouton || bouton.closest('tr') !== p.ligne) return;
     p.jours.set(bouton.dataset.jour, bouton);
-    for (const b of p.jours.values()) b.classList.add('peinte');
+    for (const b of p.jours.values()) b.classList.add(p.cible ? 'peinte' : 'suppression');
   };
   const finirPeinture = () => {
     const p = peinture.current;
     peinture.current = null;
     if (!p) return;
-    for (const b of p.jours.values()) b.classList.remove('peinte');
+    for (const b of p.jours.values()) b.classList.remove('peinte', 'suppression');
     if (p.jours.size < 2) return; // un simple clic : traité par le bouton
     finPeinture.current = Date.now();
     basculerSuivi(p.objet, p.personne, [...p.jours.keys()].sort(), p.cible);
@@ -244,9 +250,9 @@ export default function Planning() {
           const possible = objet === 'tt' ? travaille && !absentTout : coche || retire;
           const nomObjet = objet === 'tt' ? 'télétravail' : 'ticket restaurant';
           const description = `${nomComplet(personne)}, ${jourCourt(jour)} : ${nomObjet} ${coche ? 'coché' : 'non coché'}`;
-          const classes = `suivi-jour${estWeekEnd(jour) ? ' we' : ''}${ferie.has(jour) ? ' ferie' : ''}${imposes.has(jour) ? ' impose' : ''}${jour === aujourdhuiIso ? ' aujourdhui' : ''}`;
+          const classes = `suivi-jour${estWeekEnd(jour) ? ' we' : ''}${ferie.has(jour) ? ' ferie' : ''}${imposes.has(jour) ? ' impose' : ''}${jour === aujourdhuiIso ? ' aujourdhui' : ''}${donnees.moisClotures?.includes(jour.slice(0, 7)) ? ' cloture' : ''}`;
           if (!possible) return <td key={jour} colSpan={2} className={classes} />;
-          if (!jourModifiable(personne.suivi.modifiable, jour)) {
+          if (!jourModifiable(personne.suivi.modifiable, jour, donnees.moisClotures)) {
             return (
               <td key={jour} colSpan={2} className={classes}>
                 <span className={`case-suivi${coche ? ' cochee' : ''}`} role="img" aria-label={description}>{coche ? '✓' : ''}</span>
@@ -255,7 +261,7 @@ export default function Planning() {
           }
           return (
             <td key={jour} colSpan={2} className={classes}>
-              <button type="button" role="checkbox" aria-checked={coche} className={`case-suivi${coche ? ' cochee' : ''}`}
+              <button type="button" role="checkbox" aria-checked={coche} className={`case-suivi${coche ? ' cochee' : ''}${suppression.has(`${objet}-${personne.id}-${jour}`) ? ' suppression' : ''}`}
                 aria-label={description} title={`${jourCourt(jour)} : ${nomObjet}`}
                 data-objet={objet} data-personne={personne.id} data-jour={jour}
                 onClick={() => { if (Date.now() - finPeinture.current > 500) basculerSuivi(objet, personne.id, [jour], !coche); }}>
@@ -445,6 +451,12 @@ export default function Planning() {
 
       {info && <p className="message succes" role="status">{info}</p>}
       {erreurSuivi && <p className="message erreur" role="alert">{erreurSuivi}</p>}
+      {donnees?.moisClotures?.length > 0 && (
+        <p className="message alerte">
+          <strong>Mois clôturé</strong> ({donnees.moisClotures.map(libelleMoisClos).join(', ')}) : les fiches RH sont figées et les saisies TT/TR sont verrouillées.
+          Seul un directeur peut rouvrir le mois depuis la page « Fiche RH ».
+        </p>
+      )}
       {!donnees ? (
         <p className={planning.erreur ? 'message erreur' : 'chargement'}>{planning.erreur || 'Chargement…'}</p>
       ) : (
@@ -474,7 +486,7 @@ export default function Planning() {
 
       {suiviOuvert && personnesParId.get(suiviOuvert.personneId) && (
         <SuiviMois personne={personnesParId.get(suiviOuvert.personneId)} mois={mois} jourCible={suiviOuvert.jour}
-          joursFeries={donnees.joursFeries} joursImposes={donnees.imposesParEquipe[personnesParId.get(suiviOuvert.personneId).equipeId] ?? []}
+          joursFeries={donnees.joursFeries} moisClotures={donnees.moisClotures} joursImposes={donnees.imposesParEquipe[personnesParId.get(suiviOuvert.personneId).equipeId] ?? []}
           onFermer={() => setSuiviOuvert(null)} onChange={() => planning.recharger()} />
       )}
       {serie && (

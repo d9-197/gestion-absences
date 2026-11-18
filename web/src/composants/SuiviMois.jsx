@@ -7,12 +7,12 @@ import Dialogue from './Dialogue.jsx';
 
 // Une personne est modifiable, pour un jour, selon ce que l'API a annoncé : « tout » (directeur) ou, pour soi-même,
 // le mois en cours et les suivants. L'API refuse de toute façon ce qui sort du cadre.
-export const jourModifiable = (modifiable, jour) =>
-  modifiable === 'tout' || (modifiable === 'mois_courant' && jour >= `${aujourdhui().slice(0, 7)}-01`);
+export const jourModifiable = (modifiable, jour, moisClotures = []) =>
+  !moisClotures.includes(jour.slice(0, 7)) && (modifiable === 'tout' || (modifiable === 'mois_courant' && jour >= `${aujourdhui().slice(0, 7)}-01`));
 
 // Télétravail (TT) et ticket restaurant (TR) d'une personne, jour par jour pour un mois : deux cases par jour, enregistrées
 // à chaque coche. Un TR décoché est un ticket retiré. Une case n'existe que si elle a un sens ce jour-là.
-export default function SuiviMois({ personne, mois, joursFeries, joursImposes, jourCible = null, onFermer, onChange }) {
+export default function SuiviMois({ personne, mois, joursFeries, joursImposes, moisClotures = [], jourCible = null, onFermer, onChange }) {
   const { suivi } = personne;
   const [motif, setMotif] = useState('');
   const [retour, setRetour] = useState('');
@@ -53,7 +53,7 @@ export default function SuiviMois({ personne, mois, joursFeries, joursImposes, j
 
   const ligne = (jour) => {
     const raison = estWeekEnd(jour) ? 'Week-end' : feries.get(jour) ?? imposes.get(jour);
-    const editable = jourModifiable(suivi.modifiable, jour);
+    const editable = jourModifiable(suivi.modifiable, jour, moisClotures);
     const ttPossible = !raison && !absentTout(jour);
     const trPossible = possibles.has(jour);
     const remarque = raison ?? (absences(jour).length && !trPossible ? 'Absence' : retires.get(jour) ? `TR retiré : ${retires.get(jour)}` : '');

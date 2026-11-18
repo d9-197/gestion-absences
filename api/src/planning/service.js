@@ -106,10 +106,17 @@ export async function construirePlanning(db, { moi, debut, fin, personnes, direc
     }];
   }));
 
+  // Mois (AAAA-MM) clôturés par un directeur dans la période : leurs saisies TT/TR sont bloquées.
+  const clotures = await db.query(
+    `SELECT to_char(mois, 'YYYY-MM') AS mois FROM clotures_actuelles
+     WHERE action = 'cloture' AND mois <= $2 AND (mois + interval '1 month')::date > $1 ORDER BY mois`,
+    [debut, fin],
+  );
   const equipes = new Map(personnes.map((p) => [Number(p.equipe_id), p.equipe_nom]));
   return {
     debut,
     fin,
+    moisClotures: clotures.rows.map((r) => r.mois),
     joursFeries: feries.rows,
     imposesParEquipe,
     equipes: [...equipes].map(([id, nom]) => ({ id, nom })),

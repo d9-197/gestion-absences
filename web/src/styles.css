@@ -498,3 +498,10 @@ button.case-suivi.peinte { background: color-mix(in srgb, var(--accent) 55%, var
 .tableau-suivi input[type=checkbox] { width: 1.1rem; height: 1.1rem; }
 .tableau-suivi th, .tableau-suivi td { padding-top: 0.2rem; padding-bottom: 0.2rem; }
 .tableau-suivi .colonne-case { width: 3rem; }
+
+/* Décocher une case cochée : surlignage rouge (suppression) au survol, pendant un glissé et pendant l'enregistrement */
+button.case-suivi.cochee:hover, button.case-suivi.suppression { background: var(--danger, #c0392b); border-color: var(--danger, #c0392b); box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger, #c0392b) 30%, transparent); }
+button.case-suivi.suppression:not(.cochee) { color: transparent; }
+/* Mois clôturé : cases verrouillées, hachurées */
+.ligne-suivi td.cloture { background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--texte-doux) 22%, transparent) 4px 5px); }
+.ligne-suivi td.cloture .case-suivi { opacity: 0.75; }
