@@ -1,6 +1,7 @@
 import { ErreurMetier } from '../erreurs.js';
 import { chargerParametresPdf } from '../emails/donnees.js';
 import { genererFichesPdf } from './pdf.js';
+import { enteteTelechargement } from '../nom-fichier.js';
 import { transaction } from '../admin/outils.js';
 import { cloturerMois, etatCloture, ficheDe, rouvrirMois, verifierAcces, verifierMois } from './service.js';
 
@@ -48,7 +49,7 @@ export async function routesFiches(app, { pool, config, aujourdhui }) {
       : `fiches-rh-${requete.query.mois}`;
     return reponse
       .header('Content-Type', 'application/pdf')
-      .header('Content-Disposition', `attachment; filename="${nom.normalize('NFD').replace(/[^\w.-]+/g, '_')}.pdf"`)
+      .header('Content-Disposition', enteteTelechargement(`${nom}.pdf`))
       .header('Cache-Control', 'no-store')
       .send(pdf);
   });

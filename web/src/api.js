@@ -38,7 +38,10 @@ export async function telecharger(chemin) {
     if (reponse.status === 401) signalerExpiration();
     throw new ErreurApi(reponse.status, donnees?.erreur ?? 'Une erreur est survenue. Réessayez.');
   }
-  const nom = /filename="([^"]+)"/.exec(reponse.headers.get('Content-Disposition') ?? '')?.[1] ?? 'export';
+  const entete = reponse.headers.get('Content-Disposition') ?? '';
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(entete)?.[1];
+  let nom = /filename="([^"]+)"/.exec(entete)?.[1] ?? 'export';
+  try { if (utf8) nom = decodeURIComponent(utf8); } catch { /* nom ASCII conservé */ }
   return { blob: await reponse.blob(), nom, lignes: Number(reponse.headers.get('X-Lignes') ?? 0) };
 }
 

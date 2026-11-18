@@ -1,3 +1,4 @@
+import { enteteTelechargement } from '../nom-fichier.js';
 import { ErreurMetier } from '../erreurs.js';
 import { nombreDeJours } from '../calendrier/dates.js';
 import { STATUTS, lignesExport, lireAbsences } from './service.js';
@@ -71,7 +72,7 @@ export async function routesExport(app, { pool, config }) {
     const nom = `absences_${debut}_${fin}.${format}`;
     return reponse
       .header('Content-Type', format === 'csv' ? 'text/csv; charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      .header('Content-Disposition', `attachment; filename="${nom}"`)
+      .header('Content-Disposition', enteteTelechargement(nom))
       .header('X-Lignes', String(lignes.length))
       .header('Cache-Control', 'no-store')
       .send(format === 'csv' ? versCsv(lignes) : await versXlsx(lignes));
