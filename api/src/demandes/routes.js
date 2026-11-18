@@ -2,7 +2,7 @@ import { ErreurMetier, introuvable } from '../erreurs.js';
 import { transaction, parametresId } from '../admin/outils.js';
 import { enfiler } from '../emails/file.js';
 import {
-  SELECTION_DEMANDE, demandeVersJson, enregistrerDemande, lireDemande, lireDemandeVisible, preparerDemande,
+  SELECTION_DEMANDE, chevauchementsPour, couvertureDe, demandeVersJson, enregistrerDemande, lireDemande, lireDemandeVisible, preparerDemande,
 } from './service.js';
 
 const date = { type: 'string', format: 'date' };
@@ -64,7 +64,14 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
       `${SELECTION_DEMANDE} WHERE ${filtres.join(' AND ')} ORDER BY d.date_debut DESC, d.id DESC LIMIT 500`,
       valeurs,
     );
-    return rows.map((d) => demandeVersJson(d, moi));
+    const json = rows.map((d) => demandeVersJson(d, moi));
+    if (portee === 'gerees') {
+      // Pour décider : combien de collègues de la même équipe sont déjà absents sur la période.
+      const enAttente = json.filter((d) => d.statut === 'en_attente').map((d) => d.id);
+      const nombres = await chevauchementsPour(pool, enAttente, moi);
+      for (const d of json) d.collegueAbsents = d.statut === 'en_attente' ? (nombres.get(d.id) ?? 0) : null;
+    }
+    return json;
   });
 
   app.get('/demandes/compteur', async (requete) => {
@@ -97,6 +104,25 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
       [moi],
     );
     return rows.map((c) => ({ id: Number(c.id), prenom: c.prenom, nom: c.nom, moi: Number(c.id) === moi }));
+  });
+
+  // Qui d'autre, dans l'équipe, est absent pendant la période : l'aide à la décision d'un valideur.
+  app.get('/demandes/:id/couverture', { schema: { params: parametresId } }, async (requete) => {
+    const moi = moiDe(requete);
+    const demande = await lireDemandeVisible(pool, requete.params.id, moi);
+    if (!demande.est_valideur) throw new ErreurMetier(403, 'Réservé aux personnes qui peuvent traiter cette demande');
+    const { rows, effectif } = await couvertureDe(pool, demande, moi);
+    return {
+      equipe: { id: Number(demande.equipe_id), nom: demande.equipe_nom },
+      effectif,
+      absences: rows.map((a) => ({
+        demandeId: Number(a.id),
+        collaborateur: { id: Number(a.collaborateur_id), prenom: a.prenom, nom: a.nom },
+        dateDebut: a.date_debut, debutDemiJournee: a.debut_demi_journee, dateFin: a.date_fin, finDemiJournee: a.fin_demi_journee,
+        statut: a.statut === 'en_attente' ? 'en_attente' : 'confirmee',
+        type: a.type_libelle,
+      })),
+    };
   });
 
   app.get('/demandes/:id', { schema: { params: parametresId } }, async (requete) => {
@@ -144,6 +170,44 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
   });
 
   // --- Circuit ---------------------------------------------------------------
+
+  // Approbation de plusieurs demandes d'un coup. Réservée aux demandes sans avertissement : une demande qui en porte
+  // demande un regard individuel, et le refus (qui exige un motif) reste unitaire. Chaque demande est traitée à part :
+  // celles qui ne peuvent pas l'être sont rendues avec leur raison, sans empêcher les autres.
+  app.post('/demandes/decision-lot', {
+    schema: {
+      body: {
+        type: 'object', required: ['ids'], additionalProperties: false,
+        properties: { ids: { type: 'array', minItems: 1, maxItems: 50, uniqueItems: true, items: { type: 'integer', minimum: 1 } } },
+      },
+    },
+  }, async (requete) => {
+    const moi = moiDe(requete);
+    const approuvees = [];
+    const ignorees = [];
+    for (const id of requete.body.ids) {
+      const demande = await lireDemande(pool, id, moi);
+      const raison = !demande || !demande.est_valideur ? 'Demande introuvable'
+        : demande.statut !== 'en_attente' ? 'Déjà traitée ou retirée'
+          : demande.avertissements.length ? 'Porte des avertissements : à examiner individuellement' : null;
+      if (raison) { ignorees.push({ id, raison }); continue; }
+      try {
+        await transaction(pool, async (client) => {
+          const evenement = await client.query(
+            `INSERT INTO evenements_demande (demande_id, type, auteur_id) VALUES ($1, 'approbation', $2) RETURNING id`,
+            [id, moi],
+          );
+          await enfiler(client, evenement.rows[0].id);
+        });
+        approuvees.push(id);
+      } catch (erreur) {
+        if (erreur.code !== '23514') throw erreur;
+        ignorees.push({ id, raison: 'Déjà traitée ou retirée' });
+      }
+    }
+    if (approuvees.length) app.fileEmails.reveiller();
+    return { approuvees, ignorees };
+  });
 
   app.post('/demandes/:id/decision', {
     schema: {

@@ -5,6 +5,7 @@ import { aujourdhui, estWeekEnd, initialeJour, joursDuMois, libelleMois, moisCou
 import { formatPeriode, jourCourt, nomComplet } from '../format.js';
 import { useSession } from '../session.jsx';
 import Cadre from '../composants/Cadre.jsx';
+import TableauDeBord from '../composants/TableauDeBord.jsx';
 import DetailDemande from '../composants/DetailDemande.jsx';
 import FormulaireDemande, { initialePourModification } from '../composants/FormulaireDemande.jsx';
 
@@ -294,6 +295,8 @@ export default function Planning() {
           <Link to="/a-traiter">Les traiter</Link>
         </p>
       )}
+
+      {utilisateur.role === 'directeur' && <TableauDeBord />}
 
       <div className="barre-planning">
         <button className="bouton compact" type="button" onClick={() => { setInfo(''); setNouvelle({}); }}>Nouvelle demande</button>

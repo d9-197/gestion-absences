@@ -4,8 +4,10 @@ import { champsModifies, parametresId, transaction, trier, verifierValideur } fr
 const LISTE = `
   SELECT e.id, e.nom, e.parent_id, e.responsable_id, e.actif,
          (SELECT count(*)::int FROM collaborateurs c WHERE c.equipe_id = e.id AND c.actif) AS nb_collaborateurs,
-         COALESCE((SELECT array_agg(d.delegue_id ORDER BY d.delegue_id)
-                   FROM delegations d WHERE d.equipe_id = e.id), '{}') AS delegues
+         COALESCE((SELECT jsonb_agg(jsonb_build_object(
+                     'delegueId', d.delegue_id, 'dateDebut', d.date_debut, 'dateFin', d.date_fin,
+                     'active', delegation_active(d.date_debut, d.date_fin)) ORDER BY d.delegue_id)
+                   FROM delegations d WHERE d.equipe_id = e.id), '[]') AS delegations
   FROM equipes e`;
 
 const versJson = (e) => ({
@@ -15,7 +17,11 @@ const versJson = (e) => ({
   responsableId: e.responsable_id === null ? null : Number(e.responsable_id),
   actif: e.actif,
   nbCollaborateurs: e.nb_collaborateurs,
-  delegueIds: e.delegues.map(Number),
+  // Tous les délégués, avec leur période ; `active` dit s'ils peuvent valider aujourd'hui.
+  delegueIds: e.delegations.map((d) => Number(d.delegueId)),
+  delegations: e.delegations.map((d) => ({
+    delegueId: Number(d.delegueId), dateDebut: d.dateDebut, dateFin: d.dateFin, active: d.active,
+  })),
 });
 
 const proprietes = {
@@ -93,13 +99,24 @@ export async function routesEquipes(app, { pool }) {
     });
   });
 
-  // Remplace la liste des délégués de l'équipe.
+  // Remplace la liste des délégués de l'équipe. Une délégation peut être limitée dans le temps (dateDebut, dateFin
+  // inclus) ; sans date, elle est permanente. `delegueIds` reste accepté : délégations permanentes.
+  const date = { type: ['string', 'null'], format: 'date' };
   app.put('/equipes/:id/delegues', {
     schema: {
       params: parametresId,
       body: {
-        type: 'object', required: ['delegueIds'], additionalProperties: false,
-        properties: { delegueIds: { type: 'array', maxItems: 50, uniqueItems: true, items: { type: 'integer', minimum: 1 } } },
+        type: 'object', additionalProperties: false, oneOf: [{ required: ['delegueIds'] }, { required: ['delegations'] }],
+        properties: {
+          delegueIds: { type: 'array', maxItems: 50, uniqueItems: true, items: { type: 'integer', minimum: 1 } },
+          delegations: {
+            type: 'array', maxItems: 50,
+            items: {
+              type: 'object', required: ['delegueId'], additionalProperties: false,
+              properties: { delegueId: { type: 'integer', minimum: 1 }, dateDebut: date, dateFin: date },
+            },
+          },
+        },
       },
     },
   }, async (requete) => {
@@ -107,12 +124,22 @@ export async function routesEquipes(app, { pool }) {
     return transaction(pool, async (client) => {
       const { rowCount } = await client.query('SELECT 1 FROM equipes WHERE id = $1 FOR UPDATE', [id]);
       if (!rowCount) throw introuvable('Équipe');
-      for (const delegueId of requete.body.delegueIds) await verifierValideur(client, delegueId, 'Délégué');
+      const liste = requete.body.delegations
+        ?? requete.body.delegueIds.map((delegueId) => ({ delegueId, dateDebut: null, dateFin: null }));
+      if (new Set(liste.map((d) => d.delegueId)).size !== liste.length) throw new ErreurMetier(400, 'Un délégué ne peut figurer qu\'une fois');
+      for (const d of liste) {
+        await verifierValideur(client, d.delegueId, 'Délégué');
+        if (d.dateDebut && d.dateFin && d.dateFin < d.dateDebut) {
+          throw new ErreurMetier(400, 'Délégation : la date de fin précède la date de début');
+        }
+      }
       await client.query('DELETE FROM delegations WHERE equipe_id = $1', [id]);
-      await client.query(
-        'INSERT INTO delegations (equipe_id, delegue_id) SELECT $1, unnest($2::bigint[])',
-        [id, requete.body.delegueIds],
-      );
+      for (const d of liste) {
+        await client.query(
+          'INSERT INTO delegations (equipe_id, delegue_id, date_debut, date_fin) VALUES ($1, $2, $3, $4)',
+          [id, d.delegueId, d.dateDebut ?? null, d.dateFin ?? null],
+        );
+      }
       return lire(client, id);
     });
   });

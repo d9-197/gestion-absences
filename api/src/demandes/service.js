@@ -237,3 +237,46 @@ export async function enregistrerDemande(client, { prepare, auteurId, commentair
   await enfiler(client, evenement.rows[0].id);
   return rows[0].id;
 }
+
+// Rang d'une demi-journée, pour comparer des périodes (même formule que numeroDemiJournee, calculée en SQL).
+const RANG_DEBUT = `((a.date_debut - DATE '2000-01-01') * 2 + (a.debut_demi_journee = 'apres_midi')::int)`;
+const RANG_FIN = `((a.date_fin - DATE '2000-01-01') * 2 + (a.fin_demi_journee = 'apres_midi')::int)`;
+
+// Les collègues de la même équipe, visibles de `moi`, qui ont une absence (confirmée ou en attente) qui chevauche la
+// période de la demande. Réservé aux valideurs de la demande : ce sont des personnes dont ils voient déjà le planning.
+export async function couvertureDe(db, demande, moi) {
+  const debut = numeroDemiJournee(demande.date_debut, demande.debut_demi_journee);
+  const fin = numeroDemiJournee(demande.date_fin, demande.fin_demi_journee);
+  const { rows } = await db.query(
+    `SELECT a.id, a.collaborateur_id, c.prenom, c.nom, a.date_debut, a.debut_demi_journee, a.date_fin, a.fin_demi_journee,
+            a.statut, t.libelle AS type_libelle
+     FROM demandes_avec_statut a
+       JOIN collaborateurs c ON c.id = a.collaborateur_id
+       JOIN types_absence t ON t.id = a.type_id
+     WHERE a.nature = 'absence' AND a.statut IN ('en_attente', 'approuvee', 'enregistree')
+       AND c.equipe_id = $1 AND a.collaborateur_id <> $2 AND a.id <> $3
+       AND EXISTS (SELECT 1 FROM valideurs_de(c.id) v WHERE v = $4)
+       AND ${RANG_DEBUT} <= $6 AND ${RANG_FIN} >= $5
+     ORDER BY a.date_debut, c.nom, a.id`,
+    [demande.equipe_id, demande.collaborateur_id, demande.id, moi, debut, fin],
+  );
+  const effectif = (await db.query('SELECT count(*)::int AS n FROM collaborateurs WHERE equipe_id = $1 AND actif', [demande.equipe_id])).rows[0].n;
+  return { rows, effectif };
+}
+
+// Pour chaque demande, le nombre de collègues de la même équipe déjà absents (ou en attente) sur la période.
+export async function chevauchementsPour(db, ids, moi) {
+  if (!ids.length) return new Map();
+  const { rows } = await db.query(
+    `SELECT d.id, count(DISTINCT a.collaborateur_id)::int AS n
+     FROM demandes_avec_statut d
+       JOIN demandes_avec_statut a ON a.nature = 'absence' AND a.statut IN ('en_attente', 'approuvee', 'enregistree')
+         AND a.equipe_id = d.equipe_id AND a.collaborateur_id <> d.collaborateur_id AND a.id <> d.id
+         AND ${RANG_DEBUT} <= ((d.date_fin - DATE '2000-01-01') * 2 + (d.fin_demi_journee = 'apres_midi')::int)
+         AND ${RANG_FIN} >= ((d.date_debut - DATE '2000-01-01') * 2 + (d.debut_demi_journee = 'apres_midi')::int)
+         AND EXISTS (SELECT 1 FROM valideurs_de(a.collaborateur_id) v WHERE v = $2)
+     WHERE d.id = ANY($1) GROUP BY d.id`,
+    [ids, moi],
+  );
+  return new Map(rows.map((r) => [Number(r.id), r.n]));
+}

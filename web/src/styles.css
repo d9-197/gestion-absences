@@ -429,3 +429,28 @@ button.abs:hover { filter: brightness(1.15); }
   .planning { font-size: 0.65rem; }
   tr { break-inside: avoid; }
 }
+
+/* --- Lot responsables et directeurs ---------------------------------------- */
+
+.couverture { margin-top: 0.5rem; }
+.liste-simple { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.liste-simple li { margin: 0.2rem 0; }
+.barre-outils { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: flex-end; margin: 0 0 0.75rem; }
+.barre-outils > div { display: flex; flex-direction: column; gap: 0.2rem; }
+.colonne-case { width: 2.5rem; text-align: center; }
+.dates-delegation { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 0.4rem 0.6rem; align-items: center; margin: 0.15rem 0 0.6rem 1.6rem; }
+.dates-delegation label { margin: 0; font-weight: 400; font-size: 0.9rem; }
+@media (max-width: 640px) { .dates-delegation { grid-template-columns: auto 1fr; } }
+.delegation { display: block; }
+.tableau-de-bord { margin: 0 0 1rem; background: var(--surface); border: 1px solid var(--bord); border-radius: 10px; padding: 0.5rem 1rem; }
+.tableau-de-bord > summary { cursor: pointer; font-weight: 600; padding: 0.25rem 0; }
+.cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.5rem 1.5rem; padding-bottom: 0.5rem; }
+.cartes h2 { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
+.cartes p { margin: 0.25rem 0; }
+.semaine { display: flex; gap: 0.25rem; list-style: none; margin: 0; padding: 0; }
+.semaine li { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; border: 1px solid var(--bord); border-radius: 6px; padding: 0.15rem 0; }
+.semaine .initiale { font-size: 0.75rem; color: var(--texte-doux); }
+.semaine .valeur { font-weight: 600; }
+.semaine .chome { background: var(--planning-we); color: var(--texte-doux); }
+.semaine .aujourdhui { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+@media print { .tableau-de-bord { display: none !important; } }

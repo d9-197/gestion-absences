@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { appeler } from '../../api.js';
 import { useDonnees, useEnvoi } from '../../donnees.js';
+import { jourCourt } from '../../format.js';
 import Cadre from '../../composants/Cadre.jsx';
 import Dialogue, { ActionsDialogue } from '../../composants/Dialogue.jsx';
 
@@ -28,7 +29,8 @@ function Formulaire({ equipe, equipes, valideurs, onFermer, onEnregistre }) {
     nom: equipe?.nom ?? '',
     parentId: equipe?.parentId ?? '',
     responsableId: equipe?.responsableId ?? '',
-    delegueIds: equipe?.delegueIds ?? [],
+    // Une délégation par personne : sans date, elle est permanente.
+    delegations: Object.fromEntries((equipe?.delegations ?? []).map((d) => [d.delegueId, { dateDebut: d.dateDebut ?? '', dateFin: d.dateFin ?? '' }])),
     actif: equipe?.actif ?? true,
   });
   const { enCours, erreur, envoyer } = useEnvoi();
@@ -36,9 +38,12 @@ function Formulaire({ equipe, equipes, valideurs, onFermer, onEnregistre }) {
   const exclues = creation ? [] : descendance(equipes, equipe.id);
   const parentes = enArbre(equipes).filter((e) => !exclues.includes(e.id));
 
-  const basculerDelegue = (id) => setChamps({
-    ...champs,
-    delegueIds: champs.delegueIds.includes(id) ? champs.delegueIds.filter((d) => d !== id) : [...champs.delegueIds, id],
+  const basculerDelegue = (id) => {
+    const { [id]: retire, ...autres } = champs.delegations;
+    setChamps({ ...champs, delegations: retire ? autres : { ...autres, [id]: { dateDebut: '', dateFin: '' } } });
+  };
+  const changerDate = (id, cle, valeur) => setChamps({
+    ...champs, delegations: { ...champs.delegations, [id]: { ...champs.delegations[id], [cle]: valeur } },
   });
 
   async function soumettre(evenement) {
@@ -52,7 +57,11 @@ function Formulaire({ equipe, equipes, valideurs, onFermer, onEnregistre }) {
       const enregistree = creation
         ? await appeler('/admin/equipes', { methode: 'POST', corps })
         : await appeler(`/admin/equipes/${equipe.id}`, { methode: 'PATCH', corps: { ...corps, actif: champs.actif } });
-      await appeler(`/admin/equipes/${enregistree.id}/delegues`, { methode: 'PUT', corps: { delegueIds: champs.delegueIds } });
+      await appeler(`/admin/equipes/${enregistree.id}/delegues`, { methode: 'PUT', corps: {
+        delegations: Object.entries(champs.delegations).map(([id, d]) => ({
+          delegueId: Number(id), dateDebut: d.dateDebut || null, dateFin: d.dateFin || null,
+        })),
+      } });
     });
     if (reussi) onEnregistre(`L'équipe « ${champs.nom.trim()} » est ${creation ? 'créée' : 'modifiée'}.`);
   }
@@ -80,11 +89,24 @@ function Formulaire({ equipe, equipes, valideurs, onFermer, onEnregistre }) {
           <legend>Délégués</legend>
           {valideurs.length === 0 && <p className="aide">Aucun responsable ou directeur disponible.</p>}
           {valideurs.map((c) => (
-            <label className="case" key={c.id}>
-              <input type="checkbox" checked={champs.delegueIds.includes(c.id)} onChange={() => basculerDelegue(c.id)} />
-              {c.prenom} {c.nom}
-            </label>
+            <div key={c.id}>
+              <label className="case">
+                <input type="checkbox" checked={c.id in champs.delegations} onChange={() => basculerDelegue(c.id)} />
+                {c.prenom} {c.nom}
+              </label>
+              {c.id in champs.delegations && (
+                <div className="dates-delegation">
+                  <label htmlFor={`dl-debut-${c.id}`}>À partir du</label>
+                  <input id={`dl-debut-${c.id}`} type="date" value={champs.delegations[c.id].dateDebut}
+                    onChange={(e) => changerDate(c.id, 'dateDebut', e.target.value)} />
+                  <label htmlFor={`dl-fin-${c.id}`}>Jusqu'au (inclus)</label>
+                  <input id={`dl-fin-${c.id}`} type="date" value={champs.delegations[c.id].dateFin}
+                    min={champs.delegations[c.id].dateDebut || undefined} onChange={(e) => changerDate(c.id, 'dateFin', e.target.value)} />
+                </div>
+              )}
+            </div>
           ))}
+          <p className="aide">Sans date, la délégation est permanente. Avec des dates, le délégué ne peut valider que pendant la période (heure de Paris), par exemple pendant les congés du responsable.</p>
         </fieldset>
         {!creation && (
           <label className="case">
@@ -145,7 +167,17 @@ export default function Equipes() {
                   {!e.actif && <span className="pastille">Désactivée</span>}
                 </td>
                 <td>{e.responsableId ? nom[e.responsableId] : <span className="manquant">Aucun</span>}</td>
-                <td>{e.delegueIds.map((id) => nom[id]).join(', ') || '—'}</td>
+                <td>{e.delegations.map((d) => (
+                  <span key={d.delegueId} className="delegation">
+                    {nom[d.delegueId]}
+                    {(d.dateDebut || d.dateFin) && (
+                      <span className="sous-texte">
+                        {d.dateDebut ? `du ${jourCourt(d.dateDebut)}` : ''}{d.dateFin ? ` jusqu'au ${jourCourt(d.dateFin)}` : ''}
+                        {!d.active && ' (inactive aujourd\'hui)'}
+                      </span>
+                    )}
+                  </span>
+                ))}{e.delegations.length === 0 && '—'}</td>
                 <td className="nombre">{e.nbCollaborateurs}</td>
                 <td className="actions-ligne">
                   <button className="bouton lien" type="button" onClick={() => setEdition(e)}

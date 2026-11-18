@@ -36,15 +36,52 @@ function ReglagePdf({ parametres, onEnregistre }) {
   );
 }
 
+function ReglageNotifications({ reglages, onEnregistre }) {
+  const [mode, setMode] = useState(reglages.mode);
+  const [relance, setRelance] = useState(reglages.relanceJours);
+  const { enCours, erreur, envoyer } = useEnvoi();
+
+  async function soumettre(evenement) {
+    evenement.preventDefault();
+    const reussi = await envoyer(() => appeler('/admin/notifications', { methode: 'PUT', corps: { mode, relanceJours: Number(relance) } }));
+    if (reussi) onEnregistre('Les réglages de notification sont enregistrés.');
+  }
+
+  return (
+    <form onSubmit={soumettre} className="formulaire-large">
+      {erreur && <p className="message erreur" role="alert">{erreur}</p>}
+      <fieldset>
+        <legend>Demandes à traiter</legend>
+        <label className="case">
+          <input type="radio" name="mode" checked={mode === 'immediat'} onChange={() => setMode('immediat')} />
+          Un e-mail à chaque demande
+        </label>
+        <label className="case">
+          <input type="radio" name="mode" checked={mode === 'quotidien'} onChange={() => setMode('quotidien')} />
+          Un résumé par jour ouvré, vers 7 h (heure de Paris), au lieu d'un e-mail par demande
+        </label>
+      </fieldset>
+      <label htmlFor="relance-jours">Relancer après (jours, 0 = jamais)</label>
+      <input id="relance-jours" type="number" min={0} max={reglages.relanceJoursMax} value={relance} onChange={(e) => setRelance(e.target.value)} />
+      <p className="aide">
+        Une demande sans décision après ce délai est rappelée au valideur concerné, dans le résumé du matin. Après le double de ce délai,
+        les valideurs de l'échelon supérieur et les directeurs sont relancés aussi. Les e-mails de décision et leurs PDF partent toujours aussitôt.
+      </p>
+      <div className="actions"><button className="bouton" type="submit" disabled={enCours}>{enCours ? 'Enregistrement…' : 'Enregistrer'}</button></div>
+    </form>
+  );
+}
+
 export default function Emails() {
+  const notifications = useDonnees('/admin/notifications');
   const parametres = useDonnees('/admin/parametres-pdf');
   const [statut, setStatut] = useState('echec');
   const envois = useDonnees(`/admin/envois-email?statut=${statut}`);
   const [info, setInfo] = useState('');
   const [erreur, setErreur] = useState('');
 
-  if (!parametres.donnees) {
-    return <Cadre><p className={parametres.erreur ? 'message erreur' : 'chargement'}>{parametres.erreur || 'Chargement…'}</p></Cadre>;
+  if (!parametres.donnees || !notifications.donnees) {
+    return <Cadre><p className={parametres.erreur || notifications.erreur ? 'message erreur' : 'chargement'}>{parametres.erreur || notifications.erreur || 'Chargement…'}</p></Cadre>;
   }
 
   async function relancer(chemin, message) {
@@ -71,7 +108,12 @@ export default function Emails() {
       {info && <p className="message succes" role="status">{info}</p>}
       {erreur && <p className="message erreur" role="alert">{erreur}</p>}
 
-      <section aria-labelledby="titre-pdf">
+      <section aria-labelledby="titre-notifications">
+        <h2 id="titre-notifications">Notifications aux valideurs</h2>
+        <ReglageNotifications reglages={notifications.donnees} onEnregistre={(message) => { setErreur(''); setInfo(message); }} />
+      </section>
+
+      <section aria-labelledby="titre-pdf" className="section-suivante">
         <h2 id="titre-pdf">Contenu du PDF de décision</h2>
         <p className="aide">
           À chaque décision, un PDF récapitulatif part par e-mail au collaborateur, au valideur et aux directeurs :

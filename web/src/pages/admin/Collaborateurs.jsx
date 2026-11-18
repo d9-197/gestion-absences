@@ -83,12 +83,62 @@ function Formulaire({ collaborateur, equipes, estSoi, onFermer, onEnregistre }) 
   );
 }
 
+// Import d'une liste de collaborateurs depuis un fichier CSV (mise en route). Tout ou rien, après vérification.
+function Import({ onFermer, onImporte }) {
+  const [csv, setCsv] = useState('');
+  const [rapport, setRapport] = useState(null);
+  const { enCours, erreur, envoyer } = useEnvoi();
+
+  const lireFichier = async (evenement) => {
+    const fichier = evenement.target.files?.[0];
+    if (fichier) { setCsv(await fichier.text()); setRapport(null); }
+  };
+  const lancer = (simulation) => envoyer(async () => {
+    const resultat = await appeler('/admin/collaborateurs/import', { methode: 'POST', corps: { csv, simulation } });
+    setRapport(resultat);
+    if (resultat.importes) onImporte(`${resultat.importes} collaborateur${resultat.importes > 1 ? 's' : ''} importé${resultat.importes > 1 ? 's' : ''}. Aucun e-mail n'a été envoyé : utilisez « Inviter » pour chacun.`);
+  });
+  const erreurs = rapport?.lignes.filter((l) => l.erreurs.length) ?? [];
+
+  return (
+    <Dialogue titre="Importer des collaborateurs" onFermer={onFermer}>
+      <p className="aide">
+        Fichier CSV (séparateur « ; » ou « , ») avec une ligne d'en-têtes : <code>email;nom;prenom;equipe;role</code>. Le rôle est facultatif
+        (collaborateur par défaut). Les équipes doivent déjà exister. Rien n'est créé tant que toutes les lignes ne sont pas valides.
+      </p>
+      {erreur && <p className="message erreur" role="alert">{erreur}</p>}
+      <label htmlFor="import-fichier">Fichier</label>
+      <input id="import-fichier" type="file" accept=".csv,text/csv,text/plain" onChange={lireFichier} />
+      <label htmlFor="import-texte">ou contenu à coller</label>
+      <textarea id="import-texte" rows={6} value={csv} onChange={(e) => { setCsv(e.target.value); setRapport(null); }} spellCheck={false} />
+      {rapport && (
+        <div role="status">
+          {rapport.valide
+            ? <p className="message succes">{rapport.lignes.length} ligne{rapport.lignes.length > 1 ? 's' : ''} valide{rapport.lignes.length > 1 ? 's' : ''} : l'import peut être lancé.</p>
+            : <p className="message erreur">{erreurs.length} ligne{erreurs.length > 1 ? 's' : ''} à corriger ; rien n'a été importé.</p>}
+          {erreurs.length > 0 && (
+            <ul className="liste-simple">
+              {erreurs.map((l) => <li key={l.ligne}>Ligne {l.ligne} ({l.email || 'sans e-mail'}) : {l.erreurs.join(' ; ')}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+      <div className="actions">
+        <button className="bouton secondaire" type="button" onClick={onFermer}>Fermer</button>
+        <button className="bouton secondaire" type="button" disabled={enCours || !csv.trim()} onClick={() => lancer(true)}>Vérifier</button>
+        <button className="bouton" type="button" disabled={enCours || !csv.trim() || !rapport?.valide || rapport.importes > 0} onClick={() => lancer(false)}>Importer</button>
+      </div>
+    </Dialogue>
+  );
+}
+
 export default function Collaborateurs() {
   const { utilisateur } = useSession();
   const collaborateurs = useDonnees('/admin/collaborateurs');
   const equipes = useDonnees('/admin/equipes');
   const [edition, setEdition] = useState(null); // null, 'nouveau' ou le collaborateur modifié
   const [avecInactifs, setAvecInactifs] = useState(false);
+  const [importer, setImport] = useState(false);
   const [info, setInfo] = useState('');
   const [erreur, setErreur] = useState('');
 
@@ -114,8 +164,12 @@ export default function Collaborateurs() {
     <Cadre>
       <div className="entete-page">
         <h1>Collaborateurs</h1>
-        <button className="bouton compact" type="button" onClick={() => setEdition('nouveau')}
-          disabled={!equipes.donnees.some((e) => e.actif)}>Ajouter un collaborateur</button>
+        <span className="groupe-boutons">
+          <button className="bouton secondaire compact" type="button" onClick={() => setImport(true)}
+            disabled={!equipes.donnees.some((e) => e.actif)}>Importer un CSV</button>
+          <button className="bouton compact" type="button" onClick={() => setEdition('nouveau')}
+            disabled={!equipes.donnees.some((e) => e.actif)}>Ajouter un collaborateur</button>
+        </span>
       </div>
       {info && <p className="message succes" role="status">{info}</p>}
       {erreur && <p className="message erreur" role="alert">{erreur}</p>}
@@ -151,6 +205,10 @@ export default function Collaborateurs() {
           </tbody>
         </table>
       </div>
+      {importer && (
+        <Import onFermer={() => { setImport(false); collaborateurs.recharger(); }}
+          onImporte={(message) => { setErreur(''); setInfo(message); collaborateurs.recharger(); }} />
+      )}
       {edition && (
         <Formulaire
           collaborateur={edition === 'nouveau' ? null : edition}

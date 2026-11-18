@@ -1,6 +1,7 @@
 import { chargerParametresPdf, chargerRecapitulatif } from './donnees.js';
 import { contenuRecapitulatif, genererPdf } from './pdf.js';
 import { sujetPour, textePour } from './messages.js';
+import { lireReglagesNotification } from './resume.js';
 
 const TENTATIVES_MAX = 3;
 const DELAIS_MINUTES = [1, 5]; // attente après la 1re et la 2e tentative en échec
@@ -36,7 +37,8 @@ export async function enfiler(client, evenementId) {
   let modele;
   if (ev.type === 'soumission') {
     modele = 'a_traiter';
-    ajouter(await proches(), false);
+    // En mode « quotidien », les demandes à traiter sont groupées dans le résumé du matin.
+    if ((await lireReglagesNotification(client)).mode !== 'quotidien') ajouter(await proches(), false);
   } else if (ev.type === 'enregistrement') {
     modele = 'declaration';
     ajouter(await proches(), false);
@@ -63,6 +65,7 @@ export async function enfiler(client, evenementId) {
 
 // Le message complet d'un envoi enregistré : texte, et PDF le cas échéant.
 async function construireMessage(db, envoi, { appUrl, fuseau }) {
+  if (envoi.modele === 'resume') return { a: envoi.destinataire, sujet: envoi.sujet, texte: envoi.corps };
   const recap = await chargerRecapitulatif(db, envoi.evenement_id);
   const parametres = await chargerParametresPdf(db);
   const message = {

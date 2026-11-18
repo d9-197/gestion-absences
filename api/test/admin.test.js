@@ -91,7 +91,7 @@ test('équipes : création, arborescence et liste', options, async () => {
   const technique = await creer('equipes', { nom: '  Technique  ', parentId: ids.direction });
   assert.deepEqual(technique, {
     id: technique.id, nom: 'Technique', parentId: ids.direction, responsableId: null,
-    actif: true, nbCollaborateurs: 0, delegueIds: [],
+    actif: true, nbCollaborateurs: 0, delegueIds: [], delegations: [],
   });
   const dev = await creer('equipes', { nom: 'Développement', parentId: technique.id });
   ids.technique = technique.id;

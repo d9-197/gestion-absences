@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { appeler } from '../api.js';
 import { useDonnees, useEnvoi, notifierChangement } from '../donnees.js';
 import { EVENEMENTS, formatDateHeure, formatDuree, formatPeriode, jourCourt, nomComplet } from '../format.js';
+import Couverture from './Couverture.jsx';
 import Dialogue from './Dialogue.jsx';
 import Statut from './Statut.jsx';
 
@@ -62,6 +63,7 @@ export default function DetailDemande({ id, modeInitial = null, onFermer, onChan
               {demande.avertissements.map((a, i) => <p key={i} className="message alerte">{a.message}</p>)}
             </div>
           )}
+          {demande.actions.decider && demande.statut === 'en_attente' && <Couverture demandeId={demande.id} />}
           <h3>Historique</h3>
           <ol className="journal">
             {demande.journal.map((e) => (

@@ -39,6 +39,56 @@ function FormulaireFerie({ ferie, annee, onFermer, onEnregistre }) {
   );
 }
 
+// Le même jour imposé sur toute une période : fermeture de fin d'année, pont de plusieurs jours.
+function FormulairePlage({ annee, equipes, onFermer, onEnregistre }) {
+  const [champs, setChamps] = useState({ debut: `${annee}-12-24`, fin: `${annee}-12-31`, libelle: '', equipeId: '', avecDecompte: true, ouvresSeulement: true });
+  const { enCours, erreur, envoyer } = useEnvoi();
+
+  async function soumettre(evenement) {
+    evenement.preventDefault();
+    let resultat;
+    const reussi = await envoyer(async () => {
+      resultat = await appeler('/admin/jours-imposes/plage', {
+        methode: 'POST', corps: { ...champs, equipeId: champs.equipeId === '' ? null : Number(champs.equipeId) },
+      });
+    });
+    if (reussi) {
+      onEnregistre(`${resultat.ajoutes} jour${resultat.ajoutes > 1 ? 's' : ''} imposé${resultat.ajoutes > 1 ? 's' : ''} ajouté${resultat.ajoutes > 1 ? 's' : ''}`
+        + (resultat.dejaPresents ? ` (${resultat.dejaPresents} déjà présent${resultat.dejaPresents > 1 ? 's' : ''}, laissé${resultat.dejaPresents > 1 ? 's' : ''} tel${resultat.dejaPresents > 1 ? 's' : ''} quel${resultat.dejaPresents > 1 ? 's' : ''})` : '') + '.');
+    }
+  }
+
+  return (
+    <Dialogue titre="Ajouter une période imposée" onFermer={onFermer}>
+      <form onSubmit={soumettre}>
+        {erreur && <p className="message erreur" role="alert">{erreur}</p>}
+        <label htmlFor="p-debut">Du</label>
+        <input id="p-debut" type="date" required value={champs.debut} onChange={(e) => setChamps({ ...champs, debut: e.target.value })} />
+        <label htmlFor="p-fin">Au (inclus)</label>
+        <input id="p-fin" type="date" required min={champs.debut} value={champs.fin} onChange={(e) => setChamps({ ...champs, fin: e.target.value })} />
+        <label htmlFor="p-libelle">Libellé</label>
+        <input id="p-libelle" required maxLength={100} placeholder="Fermeture de fin d'année" value={champs.libelle}
+          onChange={(e) => setChamps({ ...champs, libelle: e.target.value })} />
+        <label htmlFor="p-equipe">Concerne</label>
+        <select id="p-equipe" value={champs.equipeId} onChange={(e) => setChamps({ ...champs, equipeId: e.target.value })}>
+          <option value="">Toute l'entreprise</option>
+          {equipes.map((e) => <option key={e.id} value={e.id}>Équipe « {e.nom} » et ses sous-équipes</option>)}
+        </select>
+        <label className="case">
+          <input type="checkbox" checked={champs.ouvresSeulement} onChange={(e) => setChamps({ ...champs, ouvresSeulement: e.target.checked })} />
+          Sauter les week-ends et jours fériés
+        </label>
+        <label className="case">
+          <input type="checkbox" checked={champs.avecDecompte} onChange={(e) => setChamps({ ...champs, avecDecompte: e.target.checked })} />
+          Décompté des congés
+        </label>
+        <p className="aide">Un jour déjà imposé pour la même équipe n'est pas modifié.</p>
+        <ActionsDialogue onFermer={onFermer} enCours={enCours} libelle="Ajouter" />
+      </form>
+    </Dialogue>
+  );
+}
+
 function FormulaireImpose({ impose, annee, equipes, onFermer, onEnregistre }) {
   const creation = !impose;
   const [champs, setChamps] = useState({
@@ -120,6 +170,12 @@ export default function Calendrier() {
     && action(() => appeler(`/admin/jours-feries/${f.jour}`, { methode: 'DELETE' }), `« ${f.libelle} » n'est plus férié.`);
   const supprimerImpose = (j) => window.confirm(`Supprimer le jour imposé « ${j.libelle} » ?`)
     && action(() => appeler(`/admin/jours-imposes/${j.id}`, { methode: 'DELETE' }), `« ${j.libelle} » est supprimé.`);
+  const copier = () => window.confirm(`Copier les jours imposés de ${annee - 1} sur ${annee}, aux mêmes dates ? Les ponts changent de jour d'une année à l'autre : relisez la liste ensuite.`)
+    && action(
+      () => appeler('/admin/jours-imposes/copie', { methode: 'POST', corps: { anneeSource: annee - 1, anneeCible: annee } }),
+      ({ trouves, ajoutes, ignores }) => (trouves === 0 ? `Aucun jour imposé en ${annee - 1}.`
+        : `${ajoutes} jour${ajoutes > 1 ? 's' : ''} copié${ajoutes > 1 ? 's' : ''}${ignores ? `, ${ignores} ignoré${ignores > 1 ? 's' : ''} (déjà présent${ignores > 1 ? 's' : ''})` : ''}.`),
+    );
   const retablir = () => action(
     () => appeler('/admin/jours-feries/retablir', { methode: 'POST', corps: { annee } }),
     ({ ajoutes }) => (ajoutes ? `${ajoutes} jour${ajoutes > 1 ? 's' : ''} férié${ajoutes > 1 ? 's' : ''} légal${ajoutes > 1 ? 'aux' : ''} rétabli${ajoutes > 1 ? 's' : ''}.` : 'Tous les jours fériés légaux sont déjà présents.'),
@@ -177,7 +233,11 @@ export default function Calendrier() {
       <section aria-labelledby="titre-imposes" className="section-suivante">
         <div className="entete-page">
           <h2 id="titre-imposes">Jours non travaillés imposés</h2>
-          <button className="bouton compact" type="button" onClick={() => setEdition({ sorte: 'impose', element: null })}>Ajouter</button>
+          <span className="groupe-boutons">
+            <button className="bouton secondaire compact" type="button" onClick={copier}>Copier depuis {annee - 1}</button>
+            <button className="bouton secondaire compact" type="button" onClick={() => setEdition({ sorte: 'plage', element: null })}>Ajouter une période</button>
+            <button className="bouton compact" type="button" onClick={() => setEdition({ sorte: 'impose', element: null })}>Ajouter</button>
+          </span>
         </div>
         <p className="aide">Ponts et fermetures, pour toute l'entreprise ou pour une équipe et ses sous-équipes.</p>
         <div className="tableau-defilant">
@@ -206,6 +266,10 @@ export default function Calendrier() {
 
       {edition?.sorte === 'ferie' && (
         <FormulaireFerie ferie={edition.element} annee={annee} onFermer={() => setEdition(null)}
+          onEnregistre={(message) => { setEdition(null); setErreur(''); setInfo(message); calendrier.recharger(); }} />
+      )}
+      {edition?.sorte === 'plage' && (
+        <FormulairePlage annee={annee} equipes={equipes.donnees.filter((e) => e.actif)} onFermer={() => setEdition(null)}
           onEnregistre={(message) => { setEdition(null); setErreur(''); setInfo(message); calendrier.recharger(); }} />
       )}
       {edition?.sorte === 'impose' && (
