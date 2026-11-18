@@ -188,3 +188,24 @@ test('compteurs désactivés globalement : plus de solde ni d\'avertissement', o
   assert.ok(!apercu.json().avertissements.some((a) => a.code === 'solde_insuffisant'));
   assert.equal((await appel('alice', 'PUT', '/api/compteurs/recalage', { typeId: ids.conges, dateEffet: '2026-11-10', joursRestants: 1 })).statusCode, 409);
 });
+
+test('couverture : le collaborateur voit un nombre de collègues absents, sans noms, sans blocage', options, async () => {
+  // Alice et Bob sont dans l'équipe Technique. Bob (responsable) pose une absence en attente, Chloé (autre équipe) aussi.
+  const corps = { typeId: ids.conges, dateDebut: '2027-03-01', dateFin: '2027-03-05' };
+  const apercu = async (qui, c = corps) => (await appel(qui, 'POST', '/api/demandes/previsualisation', c)).json();
+  assert.equal((await apercu('alice')).couverture.absents, 0);
+  assert.equal((await appel('bob', 'POST', '/api/demandes', corps)).statusCode, 201);
+  assert.equal((await appel('chloe', 'POST', '/api/demandes', corps)).statusCode, 201);
+  const r = await apercu('alice');
+  assert.equal(r.couverture.absents, 1, 'seule l\'équipe directe compte');
+  assert.equal(r.couverture.effectif, 1);
+  assert.deepEqual(Object.keys(r.couverture).sort(), ['absents', 'effectif'], 'seulement des nombres');
+  assert.ok(!r.avertissements.some((a) => a.code === 'couverture'), 'information, pas un avertissement enregistré');
+  assert.equal(r.blocage, null);
+  // Période sans chevauchement : zéro.
+  assert.equal((await apercu('alice', { ...corps, dateDebut: '2027-03-08', dateFin: '2027-03-09' })).couverture.absents, 0);
+  // La demande d'Alice s'enregistre, et n'enregistre pas l'information.
+  const d = await appel('alice', 'POST', '/api/demandes', corps);
+  assert.equal(d.statusCode, 201);
+  assert.ok(!d.json().avertissements.some((a) => a.code === 'couverture'));
+});

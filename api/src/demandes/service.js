@@ -200,6 +200,11 @@ export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pour
     db, { collaborateurId, type, ...periode, duree, soi: collaborateurId === moi, ignorer, pourAnnulation }, aujourdhui,
   );
 
+  // Information (jamais enregistrée ni bloquante) : combien de collègues de l'équipe sont déjà absents sur la période.
+  const couverture = pourAnnulation ? null : await collegueAbsents(db, {
+    equipeId: collaborateur.equipe_id, collaborateurId, ...periode,
+  });
+
   // Une demande qui ne pourrait être traitée par personne resterait bloquée : on la refuse dès la saisie.
   const nbValideurs = await nombreDeValideurs(db, collaborateurId);
   const blocage = type.approbation_requise && nbValideurs === 0
@@ -217,7 +222,7 @@ export async function preparerDemande(db, { utilisateur, corps, aujourdhui, pour
   return {
     collaborateur: { id: Number(collaborateurId), equipeId: Number(collaborateur.equipe_id) },
     type: { id: Number(type.id), libelle: type.libelle, approbationRequise: type.approbation_requise },
-    periode, duree, avertissements, nbValideurs, valideursProches, blocage,
+    periode, duree, avertissements, couverture, nbValideurs, valideursProches, blocage,
   };
 }
 
@@ -266,6 +271,22 @@ export async function couvertureDe(db, demande, moi) {
   );
   const effectif = (await db.query('SELECT count(*)::int AS n FROM collaborateurs WHERE equipe_id = $1 AND actif', [demande.equipe_id])).rows[0].n;
   return { rows, effectif };
+}
+
+// Le nombre (sans les noms) de collègues actifs de l'équipe directe qui ont déjà une absence, approuvée ou en attente,
+// de n'importe quel type, sur la période. Montré au collaborateur qui prépare sa demande : le nombre ne révèle ni qui
+// est absent ni pourquoi, ce qui préserve la règle de visibilité (seuls les valideurs voient les noms).
+export async function collegueAbsents(db, { equipeId, collaborateurId, dateDebut, debutDemiJournee, dateFin, finDemiJournee }) {
+  const { rows } = await db.query(
+    `SELECT count(DISTINCT a.collaborateur_id)::int AS absents,
+            (SELECT count(*)::int FROM collaborateurs WHERE equipe_id = $1 AND actif AND id <> $2) AS effectif
+     FROM demandes_avec_statut a JOIN collaborateurs c ON c.id = a.collaborateur_id AND c.actif
+     WHERE a.nature = 'absence' AND a.statut IN ('en_attente', 'approuvee', 'enregistree')
+       AND c.equipe_id = $1 AND a.collaborateur_id <> $2
+       AND ${RANG_DEBUT} <= $4 AND ${RANG_FIN} >= $3`,
+    [equipeId, collaborateurId, numeroDemiJournee(dateDebut, debutDemiJournee), numeroDemiJournee(dateFin, finDemiJournee)],
+  );
+  return rows[0];
 }
 
 // Pour chaque demande, le nombre de collègues de la même équipe déjà absents (ou en attente) sur la période.

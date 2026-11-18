@@ -167,6 +167,12 @@ export default function FormulaireDemande({ initiale = {}, remplace = null, onFe
                 </p>
                 {apercu.avertissements.map((a, i) => <p key={i} className="message alerte">{a.message}</p>)}
                 {apercu.avertissements.length > 0 && <p className="aide">Ces avertissements ne bloquent pas l'envoi.</p>}
+                {apercu.couverture?.absents > 0 && (
+                  <p className="message info">
+                    {apercu.couverture.absents} collègue{apercu.couverture.absents > 1 ? 's' : ''} de l'équipe
+                    {apercu.couverture.effectif > 0 && ` (sur ${apercu.couverture.effectif})`} {apercu.couverture.absents > 1 ? 'ont' : 'a'} déjà une absence, approuvée ou en attente, sur cette période.
+                  </p>
+                )}
                 {apercu.blocage && <p className="message erreur" role="alert">{apercu.blocage}</p>}
               </>
             )}

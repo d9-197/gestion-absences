@@ -152,6 +152,7 @@ export async function routesDemandes(app, { pool, aujourdhui }) {
     return {
       dureeDemiJournees: prepare.duree,
       avertissements: prepare.avertissements,
+      couverture: prepare.couverture,
       approbationRequise: prepare.type.approbationRequise,
       // Qui sera prévenu et examinera la demande (vide pour une simple déclaration).
       valideurs: prepare.type.approbationRequise ? prepare.valideursProches : [],

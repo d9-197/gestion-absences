@@ -506,3 +506,4 @@ button.case-suivi.suppression:not(.cochee) { color: transparent; }
 .ligne-suivi td.cloture { background-image: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--texte-doux) 22%, transparent) 4px 5px); }
 .ligne-suivi td.cloture .case-suivi { opacity: 0.75; }
 .champ-court { width: 5rem; } .soldes { margin: 1rem 0; }
+.message.info { background: var(--attente-fond); color: var(--attente-texte); }
