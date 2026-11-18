@@ -95,6 +95,9 @@ services:
     build:
       context: ./web
       target: prod
+      args:
+        # Publié sous un préfixe derrière un proxy (ex. /abs) ? À régler ici et dans APP_URL (https://hote/abs). Vide : racine.
+        BASE_PATH: ${BASE_PATH:-}
     restart: unless-stopped
     depends_on:
       api:

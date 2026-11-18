@@ -1,5 +1,5 @@
 import { creerLienMotDePasse, empreinte } from './jetons.js';
-import { COOKIE_SESSION } from './sessions.js';
+import { COOKIE_SESSION, cheminPublic } from './sessions.js';
 import { hacher, verifier, LONGUEUR_MINIMALE } from './mots-de-passe.js';
 
 const COOKIE_OIDC = 'absences_oidc';
@@ -19,7 +19,8 @@ const profil = (u) => ({
 export async function routesAuth(app, { pool, config, sessions, courriel, microsoft, limites, autologin = false }) {
   // Vérifié même quand le compte n'existe pas, pour que le temps de réponse ne révèle rien.
   const hachageFactice = await hacher('compte inexistant');
-  const cookieOidc = { path: '/api/auth/microsoft', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure };
+  const base = cheminPublic(config.appUrl); // « /abs » si l'application est publiée sous un préfixe
+  const cookieOidc = { path: `${base}/api/auth/microsoft`, httpOnly: true, sameSite: 'lax', secure: config.cookieSecure };
 
   app.get('/api/auth/config', async () => ({ microsoft: Boolean(microsoft), autologin }));
 
@@ -245,7 +246,7 @@ export async function routesAuth(app, { pool, config, sessions, courriel, micros
       return reponse.redirect(url);
     } catch (erreur) {
       requete.log.error(erreur, 'préparation de la connexion Microsoft impossible');
-      return reponse.redirect('/connexion?erreur=microsoft');
+      return reponse.redirect(`${base}/connexion?erreur=microsoft`);
     }
   });
 
@@ -259,7 +260,7 @@ export async function routesAuth(app, { pool, config, sessions, courriel, micros
       identite = await microsoft.terminer(requete.url, JSON.parse(brut));
     } catch (erreur) {
       requete.log.warn(erreur, 'retour de connexion Microsoft refusé');
-      return reponse.redirect('/connexion?erreur=microsoft');
+      return reponse.redirect(`${base}/connexion?erreur=microsoft`);
     }
 
     // Compte déjà lié à cette identité Microsoft, sinon premier rattachement par l'adresse e-mail.
@@ -276,9 +277,9 @@ export async function routesAuth(app, { pool, config, sessions, courriel, micros
         [identite.oid, identite.emails.map((email) => email.toLowerCase())],
       ));
     }
-    if (!rows.length) return reponse.redirect('/connexion?erreur=compte-inconnu');
+    if (!rows.length) return reponse.redirect(`${base}/connexion?erreur=compte-inconnu`);
 
     await sessions.ouvrir(reponse, rows[0].id);
-    return reponse.redirect('/');
+    return reponse.redirect(`${base}/`);
   });
 }

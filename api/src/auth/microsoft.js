@@ -38,7 +38,10 @@ export function creerMicrosoft({ emetteur, clientId, clientSecret, appUrl, autor
 
     // Échange le code reçu contre un jeton d'identité vérifié et renvoie l'identité Microsoft.
     async terminer(cheminRetour, verifications) {
-      const jetons = await oidc.authorizationCodeGrant(await configuration(), new URL(cheminRetour, appUrl), {
+      // L'adresse de retour est reconstruite sur l'adresse publique : derrière un proxy, l'API ne voit ni le préfixe ni le domaine.
+      const retour = new URL(adresseRetour);
+      retour.search = new URL(cheminRetour, 'http://x').search;
+      const jetons = await oidc.authorizationCodeGrant(await configuration(), retour, {
         pkceCodeVerifier: verifications.verifieur,
         expectedState: verifications.etat,
         expectedNonce: verifications.nonce,

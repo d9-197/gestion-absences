@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router';
+import { BASE } from './api.js';
 import { FournisseurSession, useSession } from './session.jsx';
 import MesDemandes from './pages/MesDemandes.jsx';
 import Planning from './pages/Planning.jsx';
@@ -60,7 +61,7 @@ function Pages() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={BASE || undefined}>
       <FournisseurSession>
         <Pages />
       </FournisseurSession>

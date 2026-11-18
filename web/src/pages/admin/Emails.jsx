@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { appeler } from '../../api.js';
+import { appeler, BASE } from '../../api.js';
 import { useDonnees, useEnvoi, notifierChangement } from '../../donnees.js';
 import { formatDateHeure } from '../../format.js';
 import Cadre from '../../composants/Cadre.jsx';
@@ -27,7 +27,7 @@ function ReglagePdf({ parametres, onEnregistre }) {
         onChange={(e) => setMentions(e.target.value)} />
       <p id="aide-mentions" className="aide">Adresse, mentions légales, durée de conservation… Communes à tous les types d'absence.</p>
       <div className="actions">
-        <a className="bouton secondaire" href="/api/admin/parametres-pdf/apercu" target="_blank" rel="noopener">
+        <a className="bouton secondaire" href={`${BASE}/api/admin/parametres-pdf/apercu`} target="_blank" rel="noopener">
           Voir un exemple de PDF
         </a>
         <button className="bouton" type="submit" disabled={enCours}>{enCours ? 'Enregistrement…' : 'Enregistrer'}</button>

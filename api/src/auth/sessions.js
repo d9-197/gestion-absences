@@ -2,8 +2,14 @@ import { empreinte, nouveauJeton } from './jetons.js';
 
 export const COOKIE_SESSION = 'absences_session';
 
+// Chemin public de l'application d'après APP_URL, sans barre finale : « /abs », ou « » à la racine.
+export function cheminPublic(appUrl) {
+  try { return new URL(appUrl).pathname.replace(/\/+$/, ''); } catch { return ''; }
+}
+
 export function creerSessions({ pool, config }) {
-  const optionsCookie = { path: '/', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure };
+  // Le cookie n'est envoyé que sous le chemin de l'application (utile quand elle est publiée sous un préfixe, comme /abs).
+  const optionsCookie = { path: cheminPublic(config.appUrl) || '/', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure };
 
   return {
     async ouvrir(reponse, collaborateurId) {

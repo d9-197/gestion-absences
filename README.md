@@ -299,6 +299,39 @@ Un même e-mail n'est envoyé qu'une fois à chaque personne, et un compte désa
 
 La preuve par e-mail ne vaut que si personne d'autre que les destinataires n'a accès aux boîtes ni à l'administration du serveur d'e-mail (voir le cahier des charges).
 
+## Publication derrière un reverse proxy
+
+L'application écoute en HTTP sur `WEB_PORT` (8080 par défaut) : le HTTPS se termine sur le proxy de l'infrastructure. Deux cas.
+
+**Sur un domaine ou sous-domaine dédié** (`https://absences.exemple.fr`) : `APP_URL=https://absences.exemple.fr`, rien d'autre. Exemple Caddy :
+
+```caddyfile
+absences.exemple.fr {
+    reverse_proxy localhost:8080
+}
+```
+
+**Sous un préfixe d'un site existant** (`https://alainfarina.com/abs/`) : le préfixe est intégré à l'application au moment de la construction (adresses des fichiers, des pages et de l'API), et le proxy doit le retirer avant de transmettre. Dans `.env` :
+
+```bash
+APP_URL=https://alainfarina.com/abs
+BASE_PATH=/abs
+```
+
+puis `docker compose up -d --build` (la reconstruction est nécessaire : `BASE_PATH` est lu à la construction de l'image `web`). Côté Caddy, **`handle_path`** retire le préfixe ; `handle` ne le fait pas et ne convient pas :
+
+```caddyfile
+alainfarina.com {
+    # ... le reste du site ...
+    redir /abs /abs/
+    handle_path /abs/* {
+        reverse_proxy localhost:8080
+    }
+}
+```
+
+Le cookie de session est alors limité au chemin `/abs`, et les liens des e-mails, le retour de la connexion Microsoft (`https://alainfarina.com/abs/api/auth/microsoft/retour`, à déclarer ainsi dans Entra ID) et les redirections en tiennent compte. L'API fait confiance aux en-têtes `X-Forwarded-*` du proxy (limitation de débit par adresse IP d'origine) : elle ne doit donc être joignable que par lui, ce que fait le réseau interne de `compose.yaml`.
+
 ## Comptes de base de données
 
 - `absences_owner` : propriétaire du schéma, réservé aux migrations.

@@ -26,7 +26,7 @@ function microsoft() {
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   // Adresse publique de l'application, sans barre finale : sert aux liens des e-mails et au retour de Microsoft.
-  appUrl: requis('APP_URL').replace(/\/+$/, ''),
+  appUrl: requis('APP_URL').replace(/\/+$/, ''), // peut comporter un chemin : https://exemple.fr/abs
   cookieSecure: cookieSecure(requis('APP_URL'), process.env.COOKIE_SECURE),
   // Fuseau de l'entreprise : sert à déterminer « aujourd'hui » (jour d'une demande, délai de prévenance).
   fuseau: process.env.FUSEAU ?? 'Europe/Paris',

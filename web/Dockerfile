@@ -14,6 +14,9 @@ EXPOSE 5173
 CMD ["npx", "vite"]
 
 FROM deps AS build
+# Chemin public si l'application est publiée sous un préfixe derrière un proxy (ex. /abs) ; vide à la racine.
+ARG BASE_PATH=
+ENV BASE_PATH=$BASE_PATH
 COPY index.html vite.config.js ./
 COPY src ./src
 RUN npm run build

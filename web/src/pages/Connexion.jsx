@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useLocation, useSearchParams } from 'react-router';
-import { appeler } from '../api.js';
+import { appeler, BASE } from '../api.js';
 import { useSession } from '../session.jsx';
 
 const ERREURS = {
@@ -98,7 +98,7 @@ export default function Connexion() {
 
       {microsoft && (
         <>
-          <a className="bouton secondaire" href="/api/auth/microsoft">Se connecter avec Microsoft</a>
+          <a className="bouton secondaire" href={`${BASE}/api/auth/microsoft`}>Se connecter avec Microsoft</a>
           <p className="separateur">ou</p>
         </>
       )}

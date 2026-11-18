@@ -1,3 +1,6 @@
+// Chemin sous lequel l'application est publiée : « /abs » derrière un proxy, « » à la racine (fixé à la construction).
+export const BASE = import.meta.env.BASE_URL.replace(/\/+$/, '');
+
 // Appels à l'API. Le cookie de session est envoyé automatiquement (même origine).
 export class ErreurApi extends Error {
   constructor(statut, message) {
@@ -9,7 +12,7 @@ export class ErreurApi extends Error {
 const signalerExpiration = () => window.dispatchEvent(new Event('session-expiree'));
 
 export async function appeler(chemin, { methode = 'GET', corps } = {}) {
-  const reponse = await fetch(`/api${chemin}`, {
+  const reponse = await fetch(`${BASE}/api${chemin}`, {
     method: methode,
     headers: corps === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: corps === undefined ? undefined : JSON.stringify(corps),
@@ -29,7 +32,7 @@ export async function appeler(chemin, { methode = 'GET', corps } = {}) {
 
 // Télécharge un fichier produit par l'API (export). Une erreur revient avec son message, comme pour un appel ordinaire.
 export async function telecharger(chemin) {
-  const reponse = await fetch(`/api${chemin}`);
+  const reponse = await fetch(`${BASE}/api${chemin}`);
   if (!reponse.ok) {
     const donnees = await reponse.json().catch(() => null);
     if (reponse.status === 401) signalerExpiration();
