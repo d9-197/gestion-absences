@@ -141,7 +141,7 @@ Dans le code de l'API, une route se protège avec `preHandler: [app.authentifier
 
 ## Administration
 
-Les directeurs disposent des écrans suivants, accessibles depuis le bandeau :
+Les directeurs disposent des écrans suivants, regroupés dans le menu « Administration » du bandeau (il se ferme au choix d'un écran, avec Échap ou d'un clic ailleurs ; un badge y signale les e-mails en échec) :
 
 - **Collaborateurs** : création avec invitation par e-mail, modification, changement d'équipe et de rôle, désactivation. Un collaborateur ne se supprime pas.
 - **Équipes** : arborescence, responsable et délégués de chaque équipe. **Une délégation peut avoir des dates** (« à partir du », « jusqu'au », inclus) : le délégué ne valide, ne voit le planning de l'équipe et ne reçoit les notifications que pendant la période ; sans date, elle est permanente. Les dates s'apprécient à l'heure de Paris. La délégation ne s'active pas toute seule en fonction des congés du responsable : on en saisit les dates.

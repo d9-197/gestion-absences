@@ -454,3 +454,15 @@ button.abs:hover { filter: brightness(1.15); }
 .semaine .chome { background: var(--planning-we); color: var(--texte-doux); }
 .semaine .aujourdhui { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 @media print { .tableau-de-bord { display: none !important; } }
+
+/* --- Menu Administration --------------------------------------------------- */
+
+.menu-admin { position: relative; }
+.menu-admin-bouton { font: inherit; color: var(--texte); background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.15rem 0; cursor: pointer; }
+.menu-admin-bouton:hover { border-bottom-color: var(--bord); }
+.menu-admin-bouton.active { border-bottom-color: var(--accent); font-weight: 600; }
+.menu-admin-liste { position: absolute; z-index: 20; top: calc(100% + 0.4rem); left: 0; min-width: 12rem; margin: 0; padding: 0.35rem; list-style: none;
+  background: var(--surface); border: 1px solid var(--bord); border-radius: 8px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.18); }
+.menu-admin-liste a { display: block; padding: 0.4rem 0.6rem; border-bottom: 0; border-radius: 6px; }
+.menu-admin-liste a:hover { background: var(--fond); }
+.menu-admin-liste a.active { background: var(--fond); }
