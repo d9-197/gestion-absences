@@ -67,7 +67,7 @@ export default function FichesRh() {
         )}
       </div>
       <p className="aide">
-        Le PDF contient le calendrier du mois (absences, télétravail, tickets restaurant) et les compteurs. Les données ne sont conservées que pendant la durée
+        Le PDF contient le calendrier du mois (absences, TT télétravail, TR tickets restaurant) et les compteurs. Les données ne sont conservées que pendant la durée
         de conservation réglée par la direction : téléchargez la fiche d'un mois avant qu'il n'en sorte, si vous devez la garder.
       </p>
       {erreurFiche && <p className="message erreur" role="alert">{erreurFiche}</p>}
@@ -86,10 +86,10 @@ export default function FichesRh() {
               <tbody>
                 <tr><th scope="row">Jours ouvrés du mois</th><td className="nombre">{nombre(c.joursOuvres)}</td></tr>
                 <tr><th scope="row">Jours travaillés</th><td className="nombre"><strong>{nombre(c.joursTravailles)}</strong></td></tr>
-                <tr><th scope="row">dont en télétravail</th><td className="nombre">{nombre(c.teletravail)}</td></tr>
+                <tr><th scope="row">dont en télétravail (TT)</th><td className="nombre">{nombre(c.teletravail)}</td></tr>
                 <tr><th scope="row">dont sur site</th><td className="nombre">{nombre(c.surSite)}</td></tr>
-                <tr><th scope="row">Tickets restaurant</th><td className="nombre"><strong>{c.tickets}</strong></td></tr>
-                <tr><th scope="row">Tickets retirés par le salarié</th><td className="nombre">{c.ticketsRetires}</td></tr>
+                <tr><th scope="row">Tickets restaurant (TR)</th><td className="nombre"><strong>{c.tickets}</strong></td></tr>
+                <tr><th scope="row">TR retirés par le salarié</th><td className="nombre">{c.ticketsRetires}</td></tr>
               </tbody>
             </table>
             <table>

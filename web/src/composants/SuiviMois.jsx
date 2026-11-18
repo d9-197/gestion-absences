@@ -10,7 +10,8 @@ import Dialogue from './Dialogue.jsx';
 export const jourModifiable = (modifiable, jour) =>
   modifiable === 'tout' || (modifiable === 'mois_courant' && jour >= `${aujourdhui().slice(0, 7)}-01`);
 
-// Ticket restaurant et télétravail d'une personne, jour par jour, pour un mois : le détail, et la saisie à l'unité.
+// Télétravail (TT) et ticket restaurant (TR) d'une personne, jour par jour pour un mois : deux cases par jour, enregistrées
+// à chaque coche. Un TR décoché est un ticket retiré. Une case n'existe que si elle a un sens ce jour-là.
 export default function SuiviMois({ personne, mois, joursFeries, joursImposes, jourCible = null, onFermer, onChange }) {
   const { suivi } = personne;
   const [motif, setMotif] = useState('');
@@ -18,75 +19,85 @@ export default function SuiviMois({ personne, mois, joursFeries, joursImposes, j
   const { enCours, erreur, envoyer } = useEnvoi();
   const cible = useRef(null);
   const jours = joursDuMois(mois.annee, mois.mois);
-  const tickets = new Set(suivi.tickets);
   const retires = new Map(suivi.ticketsRetires.map((t) => [t.jour, t.motif]));
-  const teletravail = new Set(suivi.teletravail);
+  const possibles = new Set([...suivi.tickets, ...retires.keys()]); // jours où un TR existe, coché ou non
+  // Les coches suivent le clic tout de suite ; elles se recalent sur le serveur à chaque rechargement (et reviennent si l'API refuse).
+  const [teletravail, setTeletravail] = useState(() => new Set(suivi.teletravail));
+  const [tickets, setTickets] = useState(() => new Set(suivi.tickets));
+  useEffect(() => { setTeletravail(new Set(suivi.teletravail)); setTickets(new Set(suivi.tickets)); }, [suivi]);
+  const changer = (ensemble, jour, coche) => { const n = new Set(ensemble); if (coche) n.add(jour); else n.delete(jour); return n; };
   const feries = new Map(joursFeries.map((j) => [j.jour, j.libelle]));
   const imposes = new Map(joursImposes.map((j) => [j.jour, j.libelle]));
-  const absent = (jour) => personne.absences.some((a) => a.dateDebut <= jour && a.dateFin >= jour);
+  const absences = (jour) => personne.absences.filter((a) => a.dateDebut <= jour && a.dateFin >= jour);
+  // Absent toute la journée : une absence couvre le matin et une absence couvre l'après-midi.
+  const absentTout = (jour) => {
+    const couvre = (demi) => absences(jour).some((a) => (a.dateDebut < jour || demi === 'apres_midi' || a.debutDemiJournee === 'matin')
+      && (a.dateFin > jour || demi === 'matin' || a.finDemiJournee === 'apres_midi'));
+    return couvre('matin') && couvre('apres_midi');
+  };
 
   useEffect(() => { cible.current?.scrollIntoView({ block: 'center' }); }, []);
 
-  const agir = (chemin, corps, message) => envoyer(async () => {
-    await appeler(chemin, { methode: 'PUT', corps: { collaborateurId: personne.id, ...corps } });
-    setRetour(message);
-    onChange();
-  });
+  const agir = async (chemin, corps, message) => {
+    const reussi = await envoyer(async () => {
+      await appeler(chemin, { methode: 'PUT', corps: { collaborateurId: personne.id, ...corps } });
+      setRetour(message);
+      onChange();
+    });
+    if (!reussi) { setTeletravail(new Set(suivi.teletravail)); setTickets(new Set(suivi.tickets)); } // refusé : la coche revient
+  };
+  const basculerTT = (jour, coche) => { setTeletravail((e) => changer(e, jour, coche)); return agir('/suivi/teletravail', { jours: [jour], teletravail: coche },
+    `TT ${coche ? 'déclaré' : 'annulé'} le ${jourCourt(jour)}.`); };
+  const basculerTR = (jour, coche) => { setTickets((e) => changer(e, jour, coche)); return agir('/suivi/tickets', { jours: [jour], retire: !coche, ...(coche ? {} : { motif }) },
+    `TR ${coche ? 'rétabli' : 'retiré'} le ${jourCourt(jour)}.`); };
 
   const ligne = (jour) => {
     const raison = estWeekEnd(jour) ? 'Week-end' : feries.get(jour) ?? imposes.get(jour);
     const editable = jourModifiable(suivi.modifiable, jour);
-    const peutTeletravailler = !raison && editable;
+    const ttPossible = !raison && !absentTout(jour);
+    const trPossible = possibles.has(jour);
+    const remarque = raison ?? (absences(jour).length && !trPossible ? 'Absence' : retires.get(jour) ? `TR retiré : ${retires.get(jour)}` : '');
     return (
       <tr key={jour} ref={jour === jourCible ? cible : undefined} className={jour === jourCible ? 'ligne-cible' : raison ? 'inactif' : undefined}>
         <th scope="row">{jourCourt(jour)}</th>
-        <td>
-          {tickets.has(jour) && 'Dû'}
-          {retires.has(jour) && <>Retiré{retires.get(jour) ? <span className="sous-texte">{retires.get(jour)}</span> : null}</>}
-          {!tickets.has(jour) && !retires.has(jour) && <span className="manquant">{raison ?? (absent(jour) ? 'Absence' : '—')}</span>}
-        </td>
-        <td>{teletravail.has(jour) ? 'Télétravail' : '—'}</td>
-        <td className="actions-ligne">
-          {editable && tickets.has(jour) && (
-            <button className="bouton lien" type="button" disabled={enCours} onClick={() => agir('/suivi/tickets', { jours: [jour], retire: true, motif }, `Ticket retiré le ${jourCourt(jour)}.`)}
-              aria-label={`Retirer le ticket restaurant du ${jourCourt(jour)}`}>Retirer le ticket</button>
-          )}
-          {editable && retires.has(jour) && (
-            <button className="bouton lien" type="button" disabled={enCours} onClick={() => agir('/suivi/tickets', { jours: [jour], retire: false }, `Ticket rétabli le ${jourCourt(jour)}.`)}
-              aria-label={`Rétablir le ticket restaurant du ${jourCourt(jour)}`}>Rétablir</button>
-          )}
-          {editable && teletravail.has(jour) && (
-            <button className="bouton lien" type="button" disabled={enCours} onClick={() => agir('/suivi/teletravail', { jours: [jour], teletravail: false }, `Télétravail annulé le ${jourCourt(jour)}.`)}
-              aria-label={`Annuler le télétravail du ${jourCourt(jour)}`}>Annuler le télétravail</button>
-          )}
-          {peutTeletravailler && !teletravail.has(jour) && (
-            <button className="bouton lien" type="button" disabled={enCours} onClick={() => agir('/suivi/teletravail', { jours: [jour], teletravail: true }, `Télétravail déclaré le ${jourCourt(jour)}.`)}
-              aria-label={`Déclarer du télétravail le ${jourCourt(jour)}`}>Télétravail</button>
+        <td className="colonne-case">
+          {ttPossible && (
+            <input type="checkbox" checked={teletravail.has(jour)} disabled={!editable || enCours}
+              aria-label={`TT, télétravail le ${jourCourt(jour)}`} onChange={(e) => basculerTT(jour, e.target.checked)} />
           )}
         </td>
+        <td className="colonne-case">
+          {trPossible && (
+            <input type="checkbox" checked={tickets.has(jour)} disabled={!editable || enCours}
+              aria-label={`TR, ticket restaurant le ${jourCourt(jour)}`} onChange={(e) => basculerTR(jour, e.target.checked)} />
+          )}
+        </td>
+        <td className="sous-texte-ligne">{remarque}</td>
       </tr>
     );
   };
 
   const modifiable = suivi.modifiable !== null;
   return (
-    <Dialogue titre={`Tickets restaurant et télétravail : ${nomComplet(personne)}`} onFermer={onFermer}>
+    <Dialogue titre={`TT et TR : ${nomComplet(personne)}`} onFermer={onFermer}>
       {erreur && <p className="message erreur" role="alert">{erreur}</p>}
       {retour && !erreur && <p className="message succes" role="status">{retour}</p>}
       {modifiable ? (
         <>
-          <label htmlFor="suivi-motif">Motif d'un retrait de ticket (facultatif)</label>
-          <input id="suivi-motif" maxLength={300} placeholder="Repas pris en charge par l'entreprise, note de frais…" value={motif} onChange={(e) => setMotif(e.target.value)} />
           <p className="aide">
+            Cochez <strong>TT</strong> les jours de télétravail ; <strong>TR</strong> est coché quand le ticket restaurant est dû : décochez-le pour le retirer
+            (repas pris en charge, note de frais…). Chaque coche est enregistrée aussitôt.
             {suivi.modifiable === 'tout'
-              ? 'En tant que directeur, vous pouvez corriger n\'importe quel jour, y compris dans un mois clos.'
-              : 'Vous pouvez modifier le mois en cours (jusqu\'à son dernier jour) et les mois à venir. Après, seul un directeur peut corriger.'}
+              ? ' En tant que directeur, vous pouvez corriger n\'importe quel jour, y compris dans un mois clos.'
+              : ' Vous pouvez modifier le mois en cours (jusqu\'à son dernier jour) et les mois à venir ; après, seul un directeur peut corriger.'}
           </p>
+          <label htmlFor="suivi-motif">Motif des TR décochés (facultatif)</label>
+          <input id="suivi-motif" maxLength={300} placeholder="Repas offert, note de frais…" value={motif} onChange={(e) => setMotif(e.target.value)} />
         </>
       ) : <p className="aide">Consultation seule : seul le collaborateur, ou un directeur, peut modifier ces informations.</p>}
       <div className="tableau-defilant tableau-suivi">
         <table>
-          <thead><tr><th>Jour</th><th>Ticket restaurant</th><th>Télétravail</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Jour</th><th className="colonne-case">TT</th><th className="colonne-case">TR</th><th>Remarque</th></tr></thead>
           <tbody>{jours.map(ligne)}</tbody>
         </table>
       </div>
@@ -120,19 +131,19 @@ export function SerieTeletravail({ onFermer, onChange }) {
     const e = r.ecartes;
     const details = [e.nonTravailles && `${e.nonTravailles} jour${e.nonTravailles > 1 ? 's' : ''} non travaillé${e.nonTravailles > 1 ? 's' : ''}`,
       e.absence && `${e.absence} jour${e.absence > 1 ? 's' : ''} d'absence`, e.dejaFait && `${e.dejaFait} déjà à jour`].filter(Boolean);
-    onChange(`${r.modifies} jour${r.modifies > 1 ? 's' : ''} ${champs.teletravail ? 'déclaré' : 'annulé'}${r.modifies > 1 ? 's' : ''} en télétravail`
+    onChange(`${r.modifies} jour${r.modifies > 1 ? 's' : ''} de TT ${champs.teletravail ? 'déclaré' : 'annulé'}${r.modifies > 1 ? 's' : ''}`
       + (details.length ? ` (écartés : ${details.join(', ')})` : '')
       + (r.debutEffectif !== r.debutDemande ? `. La série démarre au ${jourCourt(r.debutEffectif)} : les jours antérieurs au mois en cours ne sont modifiables que par un directeur` : '') + '.');
   }
 
   return (
-    <Dialogue titre="Télétravail en série" onFermer={onFermer}>
+    <Dialogue titre="Télétravail (TT) en série" onFermer={onFermer}>
       <form onSubmit={soumettre}>
         {erreur && <p className="message erreur" role="alert">{erreur}</p>}
         <fieldset>
           <legend>Action</legend>
-          <label className="case"><input type="radio" name="serie-action" checked={champs.teletravail} onChange={() => setChamps({ ...champs, teletravail: true })} /> Déclarer du télétravail</label>
-          <label className="case"><input type="radio" name="serie-action" checked={!champs.teletravail} onChange={() => setChamps({ ...champs, teletravail: false })} /> Annuler du télétravail déjà déclaré</label>
+          <label className="case"><input type="radio" name="serie-action" checked={champs.teletravail} onChange={() => setChamps({ ...champs, teletravail: true })} /> Déclarer du TT</label>
+          <label className="case"><input type="radio" name="serie-action" checked={!champs.teletravail} onChange={() => setChamps({ ...champs, teletravail: false })} /> Annuler du TT déjà déclaré</label>
         </fieldset>
         <fieldset>
           <legend>Tous les…</legend>
