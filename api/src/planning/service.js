@@ -5,6 +5,7 @@ const STATUTS = ['en_attente', 'approuvee', 'enregistree'];
 // Les personnes dont `moi` voit le planning : lui-même et celles qu'il peut valider (responsable ou délégué de leur
 // équipe ou d'une équipe parente, directeur). Un collaborateur ne voit donc que le sien.
 // Une personne désactivée n'apparaît que si elle a des absences sur la période.
+// La personne connectée est toujours la première de la liste, les autres sont classées par équipe puis par nom.
 export async function personnesVisibles(db, { moi, debut, fin }) {
   const { rows } = await db.query(
     `SELECT c.id, c.prenom, c.nom, c.actif, c.equipe_id, e.nom AS equipe_nom
@@ -18,7 +19,11 @@ export async function personnesVisibles(db, { moi, debut, fin }) {
   );
   // Tri alphabétique français (accents et casse ignorés) : celui de la base dépend de la langue du système.
   const ordre = new Intl.Collator('fr', { sensitivity: 'base' });
-  return rows.sort((a, b) => ordre.compare(a.equipe_nom, b.equipe_nom) || ordre.compare(a.nom, b.nom) || ordre.compare(a.prenom, b.prenom));
+  rows.sort((a, b) => ordre.compare(a.equipe_nom, b.equipe_nom) || ordre.compare(a.nom, b.nom) || ordre.compare(a.prenom, b.prenom));
+  // La ligne de la personne connectée vient toujours en premier, devant les équipes.
+  const indice = rows.findIndex((r) => Number(r.id) === Number(moi));
+  if (indice > 0) rows.unshift(...rows.splice(indice, 1));
+  return rows;
 }
 
 // Le planning de `personnes` sur une période. Seules les absences valables ou en attente y figurent.

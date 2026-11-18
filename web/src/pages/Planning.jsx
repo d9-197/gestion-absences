@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useDonnees } from '../donnees.js';
+import { Link } from 'react-router';
+import { useATraiter, useDonnees } from '../donnees.js';
 import { aujourdhui, estWeekEnd, initialeJour, joursDuMois, libelleMois, moisCourant, moisSuivant, numeroDemiJournee } from '../dates.js';
 import { formatPeriode, jourCourt, nomComplet } from '../format.js';
 import { useSession } from '../session.jsx';
 import Cadre from '../composants/Cadre.jsx';
 import DetailDemande from '../composants/DetailDemande.jsx';
+import FormulaireDemande from '../composants/FormulaireDemande.jsx';
 
 const NOMBRE_COULEURS = 8;
 const STATUTS = { confirmee: 'Confirmée', en_attente: 'En attente' };
+const INDICE = "Cliquez sur un jour libre pour poser une absence à partir de cette date, ou utilisez « Nouvelle demande ».";
 
 // Pour chaque demi-journée du mois, l'absence qui l'occupe (la confirmée l'emporte sur celle en attente).
 function creneauxDe(personne, premier, nombre) {
@@ -32,6 +35,7 @@ export default function Planning() {
   const [vue, setVue] = useState('calendrier');
   const [equipe, setEquipe] = useState('');
   const [detail, setDetail] = useState(null);
+  const [nouvelle, setNouvelle] = useState(null); // formulaire de demande ouvert depuis le planning, avec ce qu'il pré-remplit
   const [info, setInfo] = useState('');
 
   const jours = useMemo(() => joursDuMois(mois.annee, mois.mois), [mois]);
@@ -40,15 +44,23 @@ export default function Planning() {
   const planning = useDonnees(`/planning?debut=${debut}&fin=${fin}`);
   const aujourdhuiIso = aujourdhui();
   const defilement = useRef(null);
+  const indice = useRef(null);
   const donnees = planning.donnees?.debut === debut ? planning.donnees : null; // pas de données d'un autre mois
 
-  const lignes = useMemo(() => {
-    if (!donnees) return [];
+  const seul = utilisateur.role === 'collaborateur';
+  const aTraiter = useATraiter(!seul);
+
+  // Ma ligne est toujours la première et ne dépend pas du filtre d'équipe, qui ne s'applique qu'aux autres.
+  const { moi, autres } = useMemo(() => {
+    if (!donnees) return { moi: null, autres: [] };
     const premier = numeroDemiJournee(debut, 'matin');
-    return donnees.personnes
-      .filter((p) => !equipe || p.equipeId === Number(equipe))
-      .map((p) => ({ personne: p, creneaux: creneauxDe(p, premier, jours.length * 2) }));
-  }, [donnees, equipe, debut, jours]);
+    const toutes = donnees.personnes.map((p) => ({ personne: p, creneaux: creneauxDe(p, premier, jours.length * 2) }));
+    return {
+      moi: toutes.find((l) => l.personne.id === utilisateur.id) ?? null,
+      autres: toutes.filter((l) => l.personne.id !== utilisateur.id && (!equipe || l.personne.equipeId === Number(equipe))),
+    };
+  }, [donnees, equipe, debut, jours, utilisateur.id]);
+  const personnesParId = useMemo(() => new Map((donnees?.personnes ?? []).map((p) => [p.id, p])), [donnees]);
 
   // Sur un petit écran, la grille s'ouvre sur aujourd'hui plutôt que sur le 1er du mois.
   useEffect(() => {
@@ -58,9 +70,32 @@ export default function Planning() {
     conteneur.scrollLeft = colonne ? Math.max(0, colonne.offsetLeft - conteneur.clientWidth / 2) : 0;
   }, [donnees, vue]);
 
-  const seul = utilisateur.role === 'collaborateur';
+  // L'indication sous la grille change à chaque survol : on la met à jour directement, sans refaire toute la grille.
+  useEffect(() => { if (indice.current) indice.current.textContent = INDICE; }, [donnees, vue]);
+
   const titre = seul ? 'Mon planning' : 'Planning';
   const changerMois = (pas) => { setMois(moisSuivant(mois, pas)); setInfo(''); };
+
+  // Un clic sur un jour libre ouvre le formulaire : ce jour (et cette demi-journée) est le départ de l'absence.
+  const celluleLibre = (evenement) => evenement.target.closest?.('td[data-jour]');
+  const poser = (evenement) => {
+    const cellule = celluleLibre(evenement);
+    if (!cellule) return;
+    setInfo('');
+    setNouvelle({
+      collaborateurId: Number(cellule.dataset.personne),
+      dateDebut: cellule.dataset.jour,
+      debutDemiJournee: cellule.dataset.moitie === '1' ? 'apres_midi' : 'matin',
+    });
+  };
+  const survoler = (evenement) => {
+    if (!indice.current) return;
+    const cellule = celluleLibre(evenement);
+    if (!cellule) { indice.current.textContent = INDICE; return; }
+    const personne = personnesParId.get(Number(cellule.dataset.personne));
+    const pour = personne && personne.id !== utilisateur.id ? ` pour ${nomComplet(personne)}` : '';
+    indice.current.textContent = `Poser une absence${pour} à partir de ${jourCourt(cellule.dataset.jour)}, ${cellule.dataset.moitie === '1' ? 'après-midi' : 'matin'}`;
+  };
 
   function libelleAbsence(personne, absence, jour, moitie) {
     const type = absence.type ? absence.type.libelle : 'Absent';
@@ -70,9 +105,49 @@ export default function Planning() {
   const ferie = new Map((donnees?.joursFeries ?? []).map((j) => [j.jour, j.libelle]));
   const nomEquipe = Object.fromEntries((donnees?.equipes ?? []).map((e) => [e.id, e.nom]));
 
+  const ligne = ({ personne, creneaux }, estMoi) => {
+    const imposes = new Map((donnees.imposesParEquipe[personne.equipeId] ?? []).map((j) => [j.jour, j.libelle]));
+    const libre = personne.actif; // on ne pose pas d'absence pour une personne désactivée
+    const classesLigne = [estMoi && 'ligne-moi', !personne.actif && 'inactif'].filter(Boolean).join(' ');
+    return (
+      <tr key={personne.id} className={classesLigne || undefined}>
+        <th scope="row" className="nom" title={nomComplet(personne)}>
+          {nomComplet(personne)}
+          {estMoi && !seul && <span className="pastille">moi</span>}
+          {!personne.actif && <span className="pastille">Désactivé</span>}
+        </th>
+        {jours.flatMap((jour, i) => [0, 1].map((moitie) => {
+          const absence = creneaux[i * 2 + moitie];
+          const classes = ['cellule', moitie === 0 ? 'debut-jour' : '',
+            estWeekEnd(jour) ? 'we' : '', ferie.has(jour) ? 'ferie' : '', imposes.has(jour) ? 'impose' : '',
+            jour === aujourdhuiIso ? 'aujourdhui' : '', !absence && libre ? 'libre' : ''].filter(Boolean).join(' ');
+          const raison = ferie.get(jour) ?? imposes.get(jour);
+          if (!absence) {
+            return (
+              <td key={`${jour}-${moitie}`} className={classes} title={raison}
+                data-jour={libre ? jour : undefined} data-moitie={libre ? moitie : undefined} data-personne={libre ? personne.id : undefined} />
+            );
+          }
+          const etiquette = libelleAbsence(personne, absence, jour, moitie);
+          const apparence = `abs ${classeCouleur(absence, donnees.types)}${absence.statut === 'en_attente' ? ' attente' : ''}`;
+          return (
+            <td key={`${jour}-${moitie}`} className={classes}>
+              {absence.demandeId ? (
+                <button type="button" className={apparence} title={etiquette} aria-label={etiquette}
+                  onClick={() => setDetail(absence.demandeId)} />
+              ) : (
+                <span className={apparence} title={etiquette} role="img" aria-label={etiquette} />
+              )}
+            </td>
+          );
+        }))}
+      </tr>
+    );
+  };
+
   const grille = donnees && (
     <div className="planning-defilant" ref={defilement}>
-      <table className="planning">
+      <table className="planning" onClick={poser} onMouseOver={survoler} onMouseLeave={survoler}>
         <caption className="visuellement-cache">{`${titre}, ${libelleMois(mois)}`}</caption>
         <thead>
           <tr>
@@ -89,56 +164,30 @@ export default function Planning() {
           </tr>
         </thead>
         <tbody>
-          {lignes.map(({ personne, creneaux }, indice) => {
-            const imposes = new Map((donnees.imposesParEquipe[personne.equipeId] ?? []).map((j) => [j.jour, j.libelle]));
-            const nouvelleEquipe = indice === 0 || lignes[indice - 1].personne.equipeId !== personne.equipeId;
-            return [
-              nouvelleEquipe && !seul && (
-                <tr key={`equipe-${personne.equipeId}-${personne.id}`} className="ligne-equipe">
-                  <th scope="row" className="nom nom-equipe">{nomEquipe[personne.equipeId]}</th>
-                  <td colSpan={jours.length * 2} />
-                </tr>
-              ),
-              <tr key={personne.id} className={personne.actif ? undefined : 'inactif'}>
-                <th scope="row" className="nom" title={nomComplet(personne)}>
-                  {nomComplet(personne)}{!personne.actif && <span className="pastille">Désactivé</span>}
-                </th>
-                {jours.flatMap((jour, i) => [0, 1].map((moitie) => {
-                  const absence = creneaux[i * 2 + moitie];
-                  const classes = ['cellule', moitie === 0 ? 'debut-jour' : '',
-                    estWeekEnd(jour) ? 'we' : '', ferie.has(jour) ? 'ferie' : '', imposes.has(jour) ? 'impose' : '',
-                    jour === aujourdhuiIso ? 'aujourdhui' : ''].filter(Boolean).join(' ');
-                  const raison = ferie.get(jour) ?? imposes.get(jour);
-                  if (!absence) return <td key={`${jour}-${moitie}`} className={classes} title={raison} />;
-                  const etiquette = libelleAbsence(personne, absence, jour, moitie);
-                  const apparence = `abs ${classeCouleur(absence, donnees.types)}${absence.statut === 'en_attente' ? ' attente' : ''}`;
-                  return (
-                    <td key={`${jour}-${moitie}`} className={classes}>
-                      {absence.demandeId ? (
-                        <button type="button" className={apparence} title={etiquette} aria-label={etiquette}
-                          onClick={() => setDetail(absence.demandeId)} />
-                      ) : (
-                        <span className={apparence} title={etiquette} role="img" aria-label={etiquette} />
-                      )}
-                    </td>
-                  );
-                })).flat()}
-              </tr>,
-            ];
-          })}
-          {lignes.length === 0 && <tr><td colSpan={jours.length * 2 + 1} className="vide">Aucun collaborateur à afficher.</td></tr>}
+          {moi && ligne(moi, true)}
+          {autres.map((l, i) => [
+            (i === 0 || autres[i - 1].personne.equipeId !== l.personne.equipeId) && (
+              <tr key={`equipe-${l.personne.equipeId}-${l.personne.id}`} className="ligne-equipe">
+                <th scope="row" className="nom nom-equipe">{nomEquipe[l.personne.equipeId]}</th>
+                <td colSpan={jours.length * 2} />
+              </tr>
+            ),
+            ligne(l, false),
+          ])}
+          {!moi && autres.length === 0 && <tr><td colSpan={jours.length * 2 + 1} className="vide">Aucun collaborateur à afficher.</td></tr>}
         </tbody>
       </table>
     </div>
   );
 
   // Vue en liste : les mêmes absences, sous forme de tableau.
+  const toutes = [moi, ...autres].filter(Boolean);
   const liste = donnees && (
     <div className="tableau-defilant">
       <table>
         <thead><tr><th>Collaborateur</th><th>Type</th><th>Période</th><th>Statut</th><th>Actions</th></tr></thead>
         <tbody>
-          {lignes.flatMap(({ personne }) => personne.absences.map((a, i) => (
+          {toutes.flatMap(({ personne }) => personne.absences.map((a, i) => (
             <tr key={`${personne.id}-${i}`}>
               <td>{nomComplet(personne)}{!seul && <span className="sous-texte">{nomEquipe[personne.equipeId]}</span>}</td>
               <td>{a.type ? a.type.libelle : 'Absent'}</td>
@@ -152,7 +201,7 @@ export default function Planning() {
               </td>
             </tr>
           )))}
-          {lignes.every(({ personne }) => personne.absences.length === 0) && (
+          {toutes.every(({ personne }) => personne.absences.length === 0) && (
             <tr><td colSpan={5} className="vide">Aucune absence ce mois-ci.</td></tr>
           )}
         </tbody>
@@ -174,7 +223,15 @@ export default function Planning() {
         </div>
       </div>
 
+      {aTraiter > 0 && (
+        <p className="message alerte">
+          {aTraiter === 1 ? '1 demande attend' : `${aTraiter} demandes attendent`} votre décision.{' '}
+          <Link to="/a-traiter">Les traiter</Link>
+        </p>
+      )}
+
       <div className="barre-planning">
+        <button className="bouton compact" type="button" onClick={() => { setInfo(''); setNouvelle({}); }}>Nouvelle demande</button>
         {donnees && donnees.equipes.length > 1 && (
           <div>
             <label htmlFor="filtre-equipe" className="etiquette-filtre">Équipe</label>
@@ -198,6 +255,7 @@ export default function Planning() {
       ) : (
         <>
           {vue === 'calendrier' ? grille : liste}
+          {vue === 'calendrier' && <p className="aide indice-planning" ref={indice} aria-hidden="true" />}
           <ul className="legende" aria-label="Légende">
             {donnees.types.map((t, i) => (
               <li key={t.id}><span className={`echantillon abs type-${i % NOMBRE_COULEURS}`} aria-hidden="true" /> {t.libelle}</li>
@@ -210,6 +268,13 @@ export default function Planning() {
         </>
       )}
 
+      {nouvelle && (
+        <FormulaireDemande
+          initiale={nouvelle}
+          onFermer={() => setNouvelle(null)}
+          onEnregistre={(message) => { setNouvelle(null); setInfo(message); planning.recharger(); }}
+        />
+      )}
       {detail && (
         <DetailDemande
           id={detail}

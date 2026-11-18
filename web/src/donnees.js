@@ -42,3 +42,17 @@ export function useEnvoi() {
 
 // Prévient le bandeau qu'une demande a changé, pour qu'il remette à jour le nombre de demandes à traiter.
 export const notifierChangement = () => window.dispatchEvent(new Event('demandes-changees'));
+
+// Nombre de demandes en attente de la décision de la personne connectée, remis à jour après chaque décision.
+export function useATraiter(actif) {
+  const [nombre, setNombre] = useState(0);
+  const actualiser = useCallback(() => {
+    if (actif) appeler('/demandes/compteur').then((r) => setNombre(r.aTraiter)).catch(() => {});
+  }, [actif]);
+  useEffect(() => {
+    actualiser();
+    window.addEventListener('demandes-changees', actualiser);
+    return () => window.removeEventListener('demandes-changees', actualiser);
+  }, [actualiser]);
+  return nombre;
+}

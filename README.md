@@ -192,6 +192,8 @@ Une demande n'est visible que de son collaborateur, de la personne qui l'a saisi
 
 L'écran « Planning » affiche un mois à la fois, par collaborateur et à la demi-journée, avec les jours fériés, les jours imposés de l'équipe et les week-ends. Les absences sont colorées par type ; les demandes **en attente** sont hachurées, pour se distinguer des absences confirmées (approuvées ou déclarées). Une vue en liste donne les mêmes informations sous forme de tableau, et chaque absence s'ouvre sur le détail de la demande.
 
+**Page d'arrivée et saisie.** Le planning est la page d'arrivée après la connexion (il n'y a plus de page d'accueil) et le titre de l'application y ramène. **La ligne de la personne connectée est toujours la première**, repérée par une pastille « moi » et un fond coloré, et le filtre d'équipe ne s'applique qu'aux autres lignes. **Un clic sur un jour libre** ouvre le formulaire de demande, avec ce jour comme date de départ, la demi-journée cliquée (matin ou après-midi) comme début, et la personne de la ligne cliquée pour « Pour ». Un responsable ou un directeur peut donc poser une absence pour un collaborateur en cliquant sur sa ligne, dans la limite de ce que l'API lui permet déjà. Le bouton « Nouvelle demande » ouvre le même formulaire sans date, et reste le chemin au clavier ; sur écran tactile, les cases font au moins 24 px. Les responsables et directeurs voient en tête du planning le nombre de demandes qui attendent leur décision.
+
 **Qui voit quoi.** Chacun voit le planning de la personne et de ceux qu'il peut valider :
 
 | Rôle | Planning visible |

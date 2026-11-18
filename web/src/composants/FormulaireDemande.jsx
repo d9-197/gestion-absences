@@ -6,12 +6,19 @@ import Dialogue, { ActionsDialogue } from './Dialogue.jsx';
 
 const DEMI_JOURNEES = [['matin', 'Matin'], ['apres_midi', 'Après-midi']];
 
-export default function FormulaireDemande({ onFermer, onEnregistre }) {
+// `initiale` pré-remplit le formulaire quand il s'ouvre depuis le planning : la personne, et la date de départ
+// (avec sa demi-journée) qui a été cliquée.
+export default function FormulaireDemande({ initiale = {}, onFermer, onEnregistre }) {
   const types = useDonnees('/demandes/types');
   const personnes = useDonnees('/demandes/collaborateurs');
   const [champs, setChamps] = useState({
-    collaborateurId: '', typeId: '', dateDebut: '', debutDemiJournee: 'matin',
-    dateFin: '', finDemiJournee: 'apres_midi', commentaire: '',
+    collaborateurId: initiale.collaborateurId ? String(initiale.collaborateurId) : '',
+    typeId: '',
+    dateDebut: initiale.dateDebut ?? '',
+    debutDemiJournee: initiale.debutDemiJournee ?? 'matin',
+    dateFin: initiale.dateDebut ?? '', // une seule journée par défaut : on ajuste la fin si besoin
+    finDemiJournee: 'apres_midi',
+    commentaire: '',
   });
   const [apercu, setApercu] = useState(null);
   const [erreurApercu, setErreurApercu] = useState('');

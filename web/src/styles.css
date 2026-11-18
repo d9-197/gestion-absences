@@ -365,3 +365,26 @@ button.abs:hover { filter: brightness(1.15); }
 .formulaire-large select { max-width: 28rem; }
 .formulaire-large fieldset { max-width: 36rem; }
 .formulaire-large .actions { margin-top: 1.25rem; }
+
+/* --- Planning : poser une absence d'un clic -------------------------------- */
+
+.marque { font-weight: 700; color: var(--texte); text-decoration: none; }
+.marque:hover { text-decoration: underline; }
+
+/* Un jour libre se pose d'un clic : il se repère au survol, et sa ligne est celle du collaborateur concerné. */
+.cellule.libre { cursor: pointer; }
+.cellule.libre:hover { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* Ma ligne, toujours la première, se distingue des autres. */
+.planning tr.ligne-moi .nom { background: var(--attente-fond); color: var(--attente-texte); }
+.planning tr.ligne-moi .cellule { border-bottom: 2px solid var(--accent); }
+.planning tr.ligne-moi .pastille { color: inherit; border-color: currentColor; }
+
+.indice-planning { min-height: 1.4em; margin: 0.6rem 0 0; }
+.barre-planning > .bouton.compact { flex: none; }
+
+/* Sur écran tactile, les demi-journées doivent pouvoir se toucher du doigt (24 px au minimum). */
+@media (pointer: coarse) {
+  .cellule { min-width: 1.5rem; height: 2.4rem; }
+  .planning th.jour { min-width: 3rem; }
+}

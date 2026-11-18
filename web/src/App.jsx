@@ -1,6 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { FournisseurSession, useSession } from './session.jsx';
-import Accueil from './pages/Accueil.jsx';
 import MesDemandes from './pages/MesDemandes.jsx';
 import Planning from './pages/Planning.jsx';
 import Export from './pages/Export.jsx';
@@ -33,7 +32,7 @@ function Pages() {
       <Route path="/connexion" element={<Connexion />} />
       <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
       <Route path="/definir-mot-de-passe" element={<DefinirMotDePasse />} />
-      <Route path="/" element={<Protegee><Accueil /></Protegee>} />
+      <Route path="/" element={<Navigate to="/planning" replace />} />
       <Route path="/demandes" element={<Protegee><MesDemandes /></Protegee>} />
       <Route path="/planning" element={<Protegee><Planning /></Protegee>} />
       <Route path="/export" element={<Protegee role={['responsable', 'directeur']}><Export /></Protegee>} />

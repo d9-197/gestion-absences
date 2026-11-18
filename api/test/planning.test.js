@@ -99,7 +99,7 @@ test('chacun ne voit que les plannings qu\'il a le droit de voir', options, asyn
   assert.deepEqual(noms(await planning('alice')), ['alice']);
   assert.deepEqual(noms(await planning('chloe')), ['chloe']);
   // Un responsable : son équipe, avec lui-même.
-  assert.deepEqual(noms(await planning('carla')), ['alice', 'carla', 'zoe']);
+  assert.deepEqual(noms(await planning('carla')).sort(), ['alice', 'carla', 'zoe']);
   assert.deepEqual(noms(await planning('dan')).sort(), ['alice', 'dan', 'zoe']); // délégué de Développement
   // Le responsable de l'équipe parente voit aussi les sous-équipes.
   assert.deepEqual(noms(await planning('bob')).sort(), ['alice', 'bob', 'carla', 'dan', 'zoe']);
@@ -109,10 +109,18 @@ test('chacun ne voit que les plannings qu\'il a le droit de voir', options, asyn
   assert.deepEqual(noms(await planning('eric')).sort(), direction);
 });
 
-test('le planning est classé par équipe puis par nom', options, async () => {
-  const p = await planning('diane');
-  // Commerce, Développement (avec son accent), Direction, Technique ; par nom dans chaque équipe.
-  assert.deepEqual(p.personnes.map((x) => x.prenom), ['chloe', 'alice', 'carla', 'zoe', 'diane', 'eric', 'bob', 'dan']);
+test('le planning est classé par équipe puis par nom, la personne connectée en tête', options, async () => {
+  // Après la personne connectée : Commerce, Développement (avec son accent), Direction, Technique ; par nom dans chaque équipe.
+  assert.deepEqual(noms(await planning('diane')), ['diane', 'chloe', 'alice', 'carla', 'zoe', 'eric', 'bob', 'dan']);
+  assert.deepEqual(noms(await planning('eric')), ['eric', 'chloe', 'alice', 'carla', 'zoe', 'diane', 'bob', 'dan']);
+});
+
+test('la ligne de l\'utilisateur est la première, quel que soit son rôle ou son équipe', options, async () => {
+  assert.deepEqual(noms(await planning('alice')), ['alice']);
+  assert.deepEqual(noms(await planning('carla')), ['carla', 'alice', 'zoe']);
+  assert.deepEqual(noms(await planning('dan')), ['dan', 'alice', 'zoe']);
+  assert.deepEqual(noms(await planning('bob')), ['bob', 'alice', 'carla', 'zoe', 'dan']);
+  assert.deepEqual(noms(await planning('chloe')), ['chloe']);
 });
 
 test('les absences valables et en attente figurent, à la demi-journée', options, async () => {

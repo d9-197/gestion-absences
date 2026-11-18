@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import { appeler } from '../api.js';
+import { useATraiter } from '../donnees.js';
 import { useSession } from '../session.jsx';
 
 // Bandeau commun aux pages réservées aux personnes connectées.
@@ -8,14 +9,13 @@ export default function Cadre({ children, large = false }) {
   const { utilisateur, deconnecter } = useSession();
   const valideur = utilisateur.role !== 'collaborateur';
   const directeur = utilisateur.role === 'directeur';
-  const [aTraiter, setATraiter] = useState(0);
+  const aTraiter = useATraiter(valideur);
   const [echecsEmails, setEchecsEmails] = useState(0);
 
-  // Nombre de demandes en attente de la personne connectée, remis à jour après chaque décision.
+  // E-mails en échec, signalés aux directeurs ; remis à jour après chaque relance.
   const actualiser = useCallback(() => {
-    if (valideur) appeler('/demandes/compteur').then((r) => setATraiter(r.aTraiter)).catch(() => {});
     if (directeur) appeler('/admin/envois-email/compteur').then((r) => setEchecsEmails(r.echecs)).catch(() => {});
-  }, [valideur, directeur]);
+  }, [directeur]);
   useEffect(() => {
     actualiser();
     window.addEventListener('demandes-changees', actualiser);
@@ -25,11 +25,10 @@ export default function Cadre({ children, large = false }) {
   return (
     <>
       <header className="bandeau">
-        <strong>Gestion des absences</strong>
+        <Link to="/" className="marque">Gestion des absences</Link>
         <nav className="navigation" aria-label="Navigation principale">
-          <NavLink to="/" end>Accueil</NavLink>
-          <NavLink to="/demandes">Mes demandes</NavLink>
           <NavLink to="/planning">Planning</NavLink>
+          <NavLink to="/demandes">Mes demandes</NavLink>
           {valideur && <NavLink to="/export">Export</NavLink>}
           {valideur && (
             <NavLink to="/a-traiter">
