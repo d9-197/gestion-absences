@@ -40,8 +40,9 @@ function dessinerFiche(doc, fiche, { raisonSociale, editeePar, fuseau, maintenan
     doc.moveDown(0.3);
   }
   doc.font('Helvetica-Bold').fontSize(17).fillColor(NOIR).text(titreFiche(fiche.mois), gauche, doc.y, { width: largeur });
+  doc.font('Helvetica-Bold').fontSize(17).fillColor(NOIR).text(`${fiche.collaborateur.prenom} ${fiche.collaborateur.nom}`, gauche, doc.y, { width: largeur });
   doc.font('Helvetica').fontSize(11).fillColor(GRIS)
-    .text(`${fiche.collaborateur.prenom} ${fiche.collaborateur.nom} - équipe ${fiche.collaborateur.equipe}${fiche.figee ? ` - fiche clôturée le ${formatDateHeure(fiche.figee.le, fuseau)} par ${fiche.figee.par}` : ''}`, gauche, doc.y, { width: largeur });
+    .text(`Équipe ${fiche.collaborateur.equipe}${fiche.figee ? ` - fiche clôturée le ${formatDateHeure(fiche.figee.le, fuseau)} par ${fiche.figee.par}` : ''}`, gauche, doc.y, { width: largeur });
   doc.moveDown(0.8);
 
   // --- Calendrier du mois : une case par jour, la moitié gauche pour le matin, la droite pour l'après-midi.
